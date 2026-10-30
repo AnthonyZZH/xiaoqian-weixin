@@ -1,93 +1,111 @@
+<div align="center">
+
 # 小千微信 · Harness Native
 
-让 Harness 直接承载小千的模型、持久会话和工具。微信只是消息入口和发送工具，Python 驱动只负责桌面操作；不再通过独立 Brain、总 worker 或一次性 headless 转发重复调度模型。
+**把 AI 聊天搭子「小千」接进 Windows 微信，模型、会话和工具全部交给 Harness 原生管理。**
 
-本仓库是一次**不含用户数据的公开源码快照**，基础提交为 `31d600923536d01df6702a344ae8b9abf2dc2235`。它包含与该次上线相同代际的兼容驱动，以及尚未切入生产的新驱动源代码。公开快照不等于已在你的机器上完成真实微信验收。
+</div>
+
+## 这是什么
+
+小千是一个住在微信里的 AI 聊天搭子。这个仓库是它的 **Harness 原生版**：
+
+- **Harness**（DeepSeek Harness `dsh`）负责模型调用、每个聊天的持久会话和工具注册；
+- **微信**只是消息的进出口；
+- 一个**独立的 Python 驱动**专门操作微信桌面窗口（读消息、打字、点发送）。
+
+旧版里那套独立 Brain、总调度 worker 和一次性 headless 转发都已经去掉，模型只在一个地方被调度。
+
+> 这是**只含源码的公开快照**，不含任何聊天记录、人格、记忆库、凭据或日志。基础提交记录在 [`SOURCE.json`](SOURCE.json)。
+> 代码能跑测试 ≠ 已经在你的机器上和真实微信跑通，部署后请自己验收。
 
 ## 架构
 
 ```mermaid
 flowchart LR
-  W[Windows 微信] <--> D[独立 Python UI 驱动]
-  D <--> B[持久收件与发送账本]
-  B <--> H[Harness 原生 Agent / Session]
+  W[Windows 微信] <--> D[Python UI 驱动]
+  D <--> B[持久收件 / 发送账本]
+  B <--> H[Harness Agent / Session]
   H <--> P[模型 Provider]
   H --> T[按身份注册的工具]
-  T --> L[主人 main 图书馆 MCP]
-  T --> M[表情 / 搜索 / 正文 / 长任务]
+  T --> L[main 图书馆 MCP]
+  T --> M[表情 / 搜索 / 读网页 / 长任务]
 ```
 
-- 每个微信会话对应独立的持久 Agent Session；恢复使用原生 `resumeSessionId`。
-- 入站先持久化到核心，再 ACK。稳定消息身份按会话保存，切窗不能把旧消息变成新指令。
-- UI 串行执行；模型推理、下载和后台任务不占用 UI 队列。
-- 每次发送使用稳定 operation ID。发送后结果不明时保留 `unknown`，不自动重发；普通单条未知状态不能封锁整个会话。
-- 主人认证、Agent 绑定、群工具限制在程序中执行，不依赖模型自觉。群消息和网页、文档内容都不能授予主人权限。
+几个关键设计：
 
-## 能力与真实边界
+- **一个聊天 = 一个持久 Session**，重启后用原生 `resumeSessionId` 接着聊。
+- **先落盘再确认**：消息先写进账本再 ACK，按会话保存稳定的消息身份，切换窗口不会把旧消息当成新消息。
+- **UI 单线程**：桌面操作串行；模型推理、下载和后台任务不占 UI 队列。
+- **不乱重发**：每次发送都有固定 operation ID，结果不明就标 `unknown`，绝不自动补发；单条 unknown 不会卡死整个会话。
+- **权限写在代码里**：主人身份、Agent 绑定、群里能用什么工具，都由程序强制，不靠模型自觉。群消息、网页和文档里的文字都拿不到主人权限。
 
-| 能力 | 当前实现 / 限制 |
-|---|---|
-| 主人私聊、指定群 | 原生持久 Agent、会话隔离、群语境参与、停/少说/恢复；不是所有群自动开放 |
-| 人格 | 从私有状态目录加载每会话人格，动态组装系统提示；本库不附原人格 |
-| 防重复与恢复 | 会话级有序快照、入站 ACK、发送状态账本；有歧义时延迟识别，不按正文永久去重 |
-| 表情库 | 原字节存储、审核、描述/标签检索、旧库非破坏迁移；截图仅是静态预览 |
-| 网上图片入库 | 主人限定的公开 URL 下载、重定向/IP 检查、大小与总时限约束，新资源进入待审核 |
-| 动画 | 已有 GIF/APNG/WebP 原文件保留；兼容已确认的旧文件尾注格式。尚未证明能自动抓取微信原动画，也不把发送端回显当接收端播放验收 |
-| 搜索与读正文 | 独立 Bing/DDG 搜索及公开网页正文读取；搜索摘要不等于全文。超时、限流、付费墙、CAPTCHA 会明确失败；不绕过访问限制 |
-| main 图书馆 | 主人限定的 MCP 检索/读取与受约束写入接口；默认回环 `127.0.0.1:8767/mcp`，固定 main 项目。私密库不能接入社交 Agent |
-| 聊天长期记忆 | 当前会话、带证据的长期聊天记忆、原图书馆是三层不同存储；未确认发送不能记作已经送达 |
-| 定时主动检查 | 主人高峰随机 18–32 分钟、低谷随机 3–7 分钟；睡眠优先，不补发过期任务，群定时默认关闭。模型可以 skip；决策有局部超时 |
-| 长任务 | 持久 task ID、立即返回、后台状态/进度/取消/结果、重启对账；未知执行不自动重跑。模型子任务的工具权限仍受限，不等同任意电脑代理 |
-| API 余额 | 仅官方 DeepSeek provider 的固定只读余额入口，认证留在内部；转发商 key 不向官方转发。不是充值/支付工具 |
-| 插件/MCP 管理 | 原生完整列表已通过真实 ToolRuntime 边界验收，修复了可选字段含 undefined 的序列化错误；保留真实条目，不以空数组兜底。安装/启用已接宿主确认接口，但微信到宿主的确认交互和市场请求超时仍待修复/验收，不能宣称自主安装已可用 |
-| 项目文件 | 专用工作目录内受约束读写、原子备份、结构化 list/stat/sha256，含 Agent 动态撤权 |
-| 任意 shell | **未启用**。结构化 `owner_command` 不是任意 PowerShell；尚无已批准并验收的通用 shell 隔离边界 |
-| 微信附件 | TXT/DOCX 解析与消息绑定接口存在；真实文件卡下载入口尚未闭环，不能声称任意微信附件已可读取 |
-| 上下文轮换 | 成本影子观测、归档读回与切换事务代码存在；**自动轮换关闭**。缺少可靠全文 token 估计时保持 indeterminate，不把字节数当预计 token |
-| 生图/其他模型 | 可选能力，未配置即不可用；不随安装自动部署服务或购买 API |
-| 黑名单 | 不迁移；主人认证、群权限和私库隔离仍保留 |
+## 功能一览
 
-网页搜索没有付费 Search/Fetch API，并不代表使用零成本：把正文送给模型仍消耗 token。主动检查、长模型任务同样可能产生模型费用。
+✅ 可用　⚠️ 部分可用或默认关闭　❌ 未实现
 
-原生 `pluginMarket` 与已有社区索引是不同来源：原生市场未挂载，不能据此报告“没有任何市场源”。`owner_plugins indexes` 分别返回两者，并明确第三方属性。`owner_mcp discover` 只枚举其管理范围；独立的 `xiaoqian_library_*` 适配器不在此表，管理表为空也不能推断图书馆断连，应使用图书馆自身 health 工具。
+| | 功能 | 说明 |
+|---|---|---|
+| ✅ | 主人私聊、指定群聊 | 每个会话独立；群里能接话，可叫停、少说、恢复。只有配置过的群会开放 |
+| ✅ | 人格 | 每个会话单独加载人格，动态拼系统提示。仓库里不附原人格 |
+| ✅ | 防重复、断点恢复 | 按会话的有序快照 + ACK + 发送账本；拿不准时延后识别，不按正文硬去重 |
+| ✅ | 表情库 | 存原始字节，有审核、描述和标签检索；旧库可无损迁移 |
+| ✅ | 网图入库 | 仅限主人；检查重定向和 IP，有大小和时长上限，新图先进待审核 |
+| ✅ | 搜索、读网页正文 | 自带 Bing / DuckDuckGo 搜索和网页正文读取。超时、限流、付费墙、验证码会如实报错，不绕过 |
+| ✅ | main 图书馆 | 仅限主人，通过 MCP 检索、读取，写入有约束；固定 main 项目，私密库不会接给社交 Agent |
+| ✅ | 长期记忆 | 当前会话、带证据的聊天记忆、图书馆三层分开存；没确认送达的不会记成「已发送」 |
+| ✅ | 主动找你聊 | 主人活跃时段每 18–32 分钟随机检查一次，低谷时段 3–7 分钟；睡觉优先，过期不补发，模型可以选择不说话。群里默认关闭 |
+| ✅ | 长任务 | 立即返回 task ID，后台跑；可查进度、取消、看结果，重启后自动对账，状态不明的任务不会自动重跑 |
+| ✅ | 项目文件 | 只能读写指定工作目录，原子写入带备份，支持 list / stat / sha256 |
+| ✅ | API 余额 | 只查官方 DeepSeek 的余额，只读；转发商的 key 不会发给官方接口 |
+| ⚠️ | 插件 / MCP 管理 | 能完整列出插件，已修好 undefined 字段导致的序列化错误；安装和启用的微信端确认流程、市场请求超时**还没修完** |
+| ⚠️ | 微信附件 | TXT / DOCX 能解析，但从微信文件卡片下载这一步还没打通 |
+| ⚠️ | 动图 | 能保留 GIF / APNG / WebP 原文件；还不能自动抓取微信里收到的原动图 |
+| ⚠️ | 上下文轮换 | 代码已有，**自动轮换默认关闭** |
+| ⚠️ | 生图、其他模型 | 可选，不配置就不可用 |
+| ❌ | 任意 shell | **不开放**。`owner_command` 是结构化命令，不是 PowerShell |
+| ❌ | macOS | 没有 Mac 版驱动，也没在 Mac 上测过 |
 
-列出社区索引 URL 只代表来源已配置，不代表该次网络检索成功；来源超时必须如实报告，不能把超时改写成空市场或安装成功。
+> 💡 搜索不用付费 API，但把网页正文喂给模型照样耗 token；主动聊天和长任务也一样会产生模型费用。
 
-## 目录
+## 目录结构
 
 ```text
-src/          Harness 插件、会话、工具、权限、记忆、主动检查
-driver/       新代际驱动 RPC 与客户端（迁移前隔离验收）
-adapter/      新代际 Windows 适配器（非 macOS 适配器）
-compat/       与基础上线版本同代际的驱动及必要源代码
-vendor/       独立模块与保留的第三方声明
-tools/        配置渲染、受控 worker
-tests/        合成消息、fake 驱动与原生契约测试
-docs/         配置模板、发布及来源说明
-SOURCE.json   源码基础和兼容驱动指纹，不含生产路径
+src/       Harness 插件主体：会话、工具、权限、记忆、主动聊天
+driver/    新一代驱动的 RPC 和客户端（还在隔离验收）
+adapter/   新一代 Windows 微信适配器
+compat/    与当前线上版本同代的驱动（生产用这个）
+vendor/    独立模块，带各自的来源和许可说明
+tools/     部署配置生成器、受控 worker
+tests/     模拟消息、假驱动、原生接口契约测试
+docs/      配置模板、来源说明
 ```
 
-不要把 `compat` 的稳定身份状态直接交给新 `driver`。新旧身份格式、完整文本升级和历史基线需要单独迁移验收，不能通过清空数据库“解决”重复消息。
+> ⚠️ `compat/` 驱动的身份数据**不能直接交给**新的 `driver/`，两代格式不同，需要单独做迁移验收。
 
-**跨桌面迁移尚有未闭环的身份风险。** 即使保留了账本，新桌面的 UI RuntimeId 也可能重新分配；已有 `uia-row-v2` 且 `bootstrapped=true` 的状态不能证明旧可见消息在新桌面仍会被正确识别。换服务器、换交互桌面或更换驱动后，必须保持 paused，先验证身份基线与安全恢复机制；未经验证不得接收并自动回复。不能清账本、重放历史或只按正文去重来绕过此门槛。代码发布、备份可读和 fake 用例通过均不等于跨桌面迁移验收通过。
+## 运行环境
 
-## Windows 服务器依赖
+| 依赖 | 已验证版本 |
+|---|---|
+| Windows 微信 | 4.1 |
+| Node.js | 24 |
+| Python | 3.12（`uiautomation`、`comtypes`、`Pillow`，见 [`requirements-windows.txt`](requirements-windows.txt)） |
+| DeepSeek Harness | `@deepseek-ai/dsh` `0.2.1-rc.4` |
+| basic-memory（可选） | `0.24.1` |
 
-已验证的依赖代际：Node.js 24、Python 3.12、DeepSeek Harness `0.2.1-rc.4`、Windows 微信 4.1 UI。Python 依赖见 `requirements-windows.txt`（uiautomation、comtypes、Pillow）。包升级或微信 UI 更新可能改变接口，先在隔离副本验证。
+**重要：Harness 必须跑在微信所在的那个已登录桌面会话里。** 通过 SSH 启动的进程在 Session 0，看不到微信窗口。云服务器上 RDP 断开、锁屏、注销的表现各不相同，部署后要实际测一遍。
 
-真实 UI 需要微信所在的**同一个交互登录会话与桌面**。SSH 服务所在的 Session 0 不等于微信桌面。Harness 本身是 Node CLI Web host，浏览器是管理前端；关闭浏览器不等于停止宿主。某台机器 RDP 断开后可继续操作，不代表锁屏、注销、会话切换或所有云服务器都可用，须针对部署环境验收。
+## 快速开始
 
-先确认现有 Python 解释器及已装包，再决定是否创建独立虚拟环境；不要给生产虚拟环境盲目升级依赖。仓库不包含微信、模型权重、Harness 私有配置或 API key。
+下面的路径只是示例，换成你自己的。**聊天、人格、记忆、日志等所有运行数据都放在仓库目录外面。**
 
-## 空白环境安装
-
-以下路径是**示例路径**，请替换为自己的独立目录。真实状态、人格、库、附件和日志都放在 Git 工作树之外。
+### 1. 安装依赖
 
 ```powershell
-$Repo = 'C:\Apps\xiaoqian-weixin'
+$Repo     = 'C:\Apps\xiaoqian-weixin'
 $HostRoot = 'C:\Apps\Harness'
-$Private = 'C:\AppData\Xiaoqian'
-$Python = 'C:\Python312\python.exe'
+$Private  = 'C:\AppData\Xiaoqian'
+$Python   = 'C:\Python312\python.exe'
 
 New-Item -ItemType Directory -Force $HostRoot, $Private | Out-Null
 & $Python -m venv "$Private\venv"
@@ -95,27 +113,45 @@ New-Item -ItemType Directory -Force $HostRoot, $Private | Out-Null
 npm install --prefix $HostRoot @deepseek-ai/dsh@0.2.1-rc.4 @deepseek-ai/dsh-tools@0.2.1-rc.4
 ```
 
-1. 在 Harness Web profile 中启用所需原生服务，配置模型 provider。示例渲染器使用 `deepseek-official` / `deepseek-flash`；该别名必须与真实 provider 对齐。渲染器只生成桥接补丁，**不会创建完整宿主/provider 配置**。
-2. 由宿主受控环境提供认证。不要把 key 写入 README、patch、Git、模型输入或诊断日志。第三方转发 provider 不能冒充官方余额接口。
-3. 在交互会话中打开并登录微信，核验主人私聊目标。显示名可能重复，结合现有绑定或一次性身份标记确认；有歧义时不发送。
-4. 渲染首次配置（默认暂停、群定时关闭、自动轮换关闭）：
+### 2. 配置模型
+
+在 Harness 的 Web profile 里配好模型 provider。生成器默认用 `deepseek-official` / `deepseek-flash`，名字要和你实际配置的一致。API key 交给 Harness 的环境去管，**别写进仓库、补丁文件或日志**。
+
+### 3. 登录微信，确认主人
+
+在桌面会话里打开并登录微信，确认主人私聊窗口的标题。重名的话要额外核对，拿不准就别发。
+
+### 4. 生成配置补丁
 
 ```powershell
 node "$Repo\tools\render-owner-deployment.mjs" `
   --state-root "$Private\state" `
   --python "$Private\venv\Scripts\python.exe" `
-  --owner-title 'REPLACE_WITH_CONFIRMED_OWNER_TITLE' `
+  --owner-title '主人的微信备注名' `
   --native-package-root "$HostRoot\node_modules\@deepseek-ai" `
   --adapter-root "$Repo\compat\adapter" `
   --driver-rpc "$Repo\compat\driver\bridge_rpc.py" `
   --output "$Private\wechat.patch.json"
 ```
 
-输出文件采用拒绝覆盖模式。不要复用真实聊天、人格、库、stateDir 或旧服务器配置作为公开模板。
+生成的配置默认：**启动即暂停**、只有主人私聊、群里不主动说话、自动轮换关闭。输出文件已存在时会拒绝覆盖。
 
-可选开关由渲染器显式配置：`--main-library true`、`--owner-management true`、`--balance true`、`--owner-wake true`；长任务另需绝对 `--task-root`，文件工具另需独立 `--work-root` 与 `--base-python`，远程图片另需 `--base-python` 与 `--site-packages`。只为已部署、已核验的组件打开开关。群需指定经确认的 `--group-title`，不会自动开放所有聊天。
+可选开关（都要显式打开，只开你已经部署好的）：
 
-5. 在微信所在的交互会话启动宿主：
+| 参数 | 作用 | 额外要求 |
+|---|---|---|
+| `--group-title '群名'` | 开放一个群 | 群名需确认无误 |
+| `--main-library true` | 接 main 图书馆 | 本机 `127.0.0.1:8767/mcp` 已运行 basic-memory |
+| `--owner-wake true` | 主动找主人聊天 | — |
+| `--owner-management true` | 插件 / MCP 管理 | — |
+| `--balance true` | 查 DeepSeek 余额 | 官方 provider |
+| `--long-tasks true` | 长任务 | `--task-root <绝对路径>` |
+| `--owner-files true` | 项目文件读写 | `--work-root <独立目录>` + `--base-python <路径>` |
+| `--remote-media true` | 网图入库 | `--base-python <路径>` + `--site-packages <路径>` |
+
+### 5. 启动
+
+在微信所在的桌面会话里运行：
 
 ```powershell
 $env:DSH_HOME = "$Private\harness-home"
@@ -123,75 +159,80 @@ node "$HostRoot\node_modules\@deepseek-ai\dsh\lib\bin.js" `
   --profile web --patch "$Private\wechat.patch.json"
 ```
 
-先保持 `startPaused=true` 核对实际 Agent、人格来源、owner-only 工具和驱动健康，再通过受控管理入口恢复。初始化只建立历史基线，不重放旧消息。不要让新旧微信控制程序同时运行。
+启动后是暂停状态。先确认 Agent、人格、主人专属工具和驱动都正常，再从管理入口恢复。首次运行只会记录历史消息作为基线，不会回复旧消息。**新旧两套微信控制程序不要同时跑。**
 
-## main 图书馆 MCP
+## main 图书馆（可选）
 
-本仓库只包含客户端适配，不附带用户库或 basic-memory 服务。先独立部署 basic-memory，将服务绑定回环地址，固定到 **main** 项目。已核验服务代际为 basic-memory `0.24.1`，文本全文检索；没有语义模型下载。
+本仓库只有客户端，不带 basic-memory 服务和任何笔记。
 
-- 对齐 endpoint `http://127.0.0.1:8767/mcp`；不要改成开放公网端口来“解决连接”。
-- 用实际存在的锚点检查 health；锚点不存在是配置问题，不代表记忆删除。默认锚点配置应与自己的库一致。
-- 当前会话历史、证据长期记忆和图书馆不是同一目录，复制一个空目录不能算记忆迁移。
-- 写入使用精确目标/校验和与读回确认；结果未知不盲重试，不覆盖已有笔记。
-- 主人绑定和实际 Agent 必须通过检查。群与其他私聊不能继承 main，更不能连接私密库端点。
-- main 库、索引和备份单独迁移；不要放入此公开仓库。迁移时校验文件数量和 SHA-256，保留原件。
+- 自己部署 basic-memory，**只监听本机** `127.0.0.1:8767/mcp`，固定用 main 项目。别为了连上就开到公网。
+- health 检查用库里真实存在的笔记做锚点；锚点不存在是配置问题，不代表记忆丢了。
+- 写入时校验目标和校验和，写完读回确认；结果不明时不盲目重试，也不覆盖已有笔记。
+- 群聊和其他私聊不会继承 main，更不会接到私密库。
 
-## 配置与数据分离
+## 数据要分开保存
 
-至少分别保存：Harness 私有 home/provider 环境、桥接 stateDir、驱动 SQLite、主动检查 SQLite、每会话 persona、表情原文件与索引、证据记忆、长任务账本、轮换账本和 main vault。它们都不属于代码发布包。
+以下内容都**不属于代码**，升级、迁移时要单独备份：
 
-`stateDir` 下实际子目录由对应模块创建；升级前记录真实配置解析后的路径，不从默认盘符推断。`bridge/bridge.json` 保存会话映射，驱动及 schedule 数据库保存 ACK、快照、unknown 和定时状态。不要只备份源码而遗漏这些状态。
+Harness home 与 provider 配置 · 桥接 `stateDir`（含 `bridge/bridge.json` 会话映射）· 驱动 SQLite（ACK、快照、unknown）· 主动聊天 SQLite · 每会话人格 · 表情原文件与索引 · 证据记忆 · 长任务账本 · 轮换账本 · main 图书馆
 
-`owner_files` 工作目录必须是独立 work-data 目录，不能指向 Harness home、凭据、会话、spool 或 private vault。不要把通用 shell 当作“只允许项目文件”的等价实现。
+`owner_files` 的工作目录必须是独立目录，不能指向 Harness home、凭据、会话数据或私密库。
+
+## ⚠️ 换机器 / 换桌面前必读
+
+换服务器、换桌面会话或换驱动后，即使账本完整，微信 UI 的元素 ID 也可能全部重新分配，旧消息可能被认成新消息。
+
+**迁移后必须保持暂停**，先验证消息身份基线，确认安全后再恢复自动回复。不要用清账本、重放历史或按正文去重来绕过这一步。fake 测试通过不等于迁移验收通过。
 
 ## 升级与回滚
 
-1. 导出当前代码提交和可恢复 Git bundle；备份启动入口与私有配置。备份包含隐私时放在受控目录，不上传公开 issue。
-2. 暂停新接收，等待正在执行的发送/Agent 回合到安全点；保留真正未处理队列。历史 unknown 不要求清零，也不能自动重发。
-3. 在宿主停止写入后，一致备份 bridge、SQLite 及 WAL、原生会话、persona、媒体与任务状态，记录哈希。
-4. 准备**另一个不可变版本目录**；验证与实际配置、模型别名、Python、平台驱动对应。先验证可恢复启动路径，再停当前实例。
-5. 若使用 Windows 任务计划进入已登录桌面，必须明确批准、无密码、限定现有身份和必要权限；验证目标 Session。不要擅自新增持久访问或修改系统安全策略。一次性任务成功后删除。
-6. 加载新版本后核对 PID/Session、实际源码指纹、驱动暂停状态、原会话 ID、人格实际系统提示、工具清单、群隔离、睡眠截止与 next_due。观察错误和队列；不能以进程存活代替微信 UI 可用。
-7. 确认运行后更新下一次启动入口。真实收发验收只能面向明确批准的会话，不群发测试。
+**升级**
 
-回滚指向上一可用的 **Harness-native** 版本，不恢复已经停用的旧外壳。若新版本已接受消息或发送，不能直接用旧整库覆盖最新状态，否则会丢 ACK 或重发；先对账，将 unknown 保留。只有未产生新业务写入的失败启动才可按一致备份原样恢复。不要强删原生 Session 写锁；先查明持有者，正常关闭/等待生命周期释放。
+1. 备份当前代码（Git bundle）、启动入口和私有配置。
+2. 暂停接收，等正在发送的消息和正在进行的 Agent 回合走完。
+3. 停写后一致性备份 bridge、SQLite（含 WAL）、会话、人格、媒体、任务状态，记下哈希。
+4. 把新版本放到**另一个目录**，确认配置、模型别名、Python、驱动都对得上。
+5. 启动后核对：进程所在 Session、源码指纹、暂停状态、会话 ID、人格提示词、工具清单、群隔离、定时状态。进程活着不代表微信能用。
+6. 确认无误后再改启动入口。实测只对明确同意的会话发消息，不要群发测试。
+
+**回滚**
+
+回到上一个可用的 Harness-native 版本，不回到旧外壳。新版本如果已经收发过消息，**不能直接用旧备份整库覆盖**，否则会丢 ACK 或重复发送；先对账，unknown 原样保留。不要强删 Session 写锁，先查清是谁持有。
 
 ## 常见问题
 
-| 现象 | 优先核对 |
+| 现象 | 先查这里 |
 |---|---|
-| SSH 能启动但微信不可操作 | 进程是否在微信同一交互 Session/桌面；不要反复 Session 0 启动 |
-| 人格为空、风格不对 | 实际 stateDir 与 feature 路径、是否双拼目录、当前 Agent 有效 prompt；文件存在不代表已注入 |
-| 表情库为空 | 旧资源路径/schema 与会话 scope，先做非破坏迁移；不要让用户重传已有资源 |
-| 同一消息多次回复 | 切窗身份稳定性、每聊天快照、ACK、是否把自身出站回读；不要按正文永久去重 |
-| 输入框有草稿但未发 | 区分点击前失败与点击后未知，核对草稿归属；不盲点发送或清用户手工草稿 |
-| 搜索有标题没正文 | 使用 fetch/read-page 工具，搜索摘要不包含全文 |
-| 主动检查不发生 | 总开关/private/group、真实 sleep_until、时区/日历、next_due、决策超时；不能清真实用户休眠冒充修复 |
-| 插件安装待确认 | 检查 Web profile 的原生 manager/market 注入及具体确认状态；不要反复点击或放开全局权限 |
-| 余额不可用 | 官方 origin、同 provider 认证闭包、rc.4 包路径/指纹；不把转发商 key 发向官方 |
+| SSH 能启动但操作不了微信 | 进程是不是和微信在同一个桌面会话，别在 Session 0 里反复启动 |
+| 人格为空或风格不对 | 实际 `stateDir` 路径、目录是否套了两层、当前 Agent 实际生效的提示词 |
+| 表情库是空的 | 旧库路径和 schema，先做无损迁移，别让用户重传 |
+| 同一条消息回了好几次 | 切窗后身份是否稳定、快照和 ACK、是否把自己发出的消息读回来了 |
+| 输入框有草稿没发出去 | 分清是点发送前失败还是点了之后结果不明；别盲点发送，也别清掉用户手打的草稿 |
+| 搜到了标题没有正文 | 用读网页工具，搜索摘要不是全文 |
+| 不主动找我聊 | 总开关、私聊/群开关、睡眠截止时间、时区、`next_due`、决策超时 |
+| 插件一直等确认 | Web profile 的插件管理和市场是否注入、确认状态；别反复点或放开全局权限 |
+| 查不到余额 | 是不是官方 provider、认证是否同源、rc.4 包路径 |
 
-报告问题时只分享脱敏的版本、时间、状态、operation ID/哈希和最小错误。宿主日志可能包含 Web token，不能整份贴到公开 issue。
+提 issue 时只贴脱敏后的版本号、时间、状态、operation ID 和最小报错。**Harness 日志里可能有 Web token，不要整份贴出来。**
 
-## 测试与验收
-
-代码包含合成消息/fake 子进程、权限隔离、原始媒体格式、稳定身份和原生契约测试。安装必要的本地 Harness 依赖后可运行：
+## 测试
 
 ```powershell
 Set-Location $Repo
-$env:XQ_TEST_PYTHON = "$Private\venv\Scripts\python.exe"
+$env:XQ_TEST_PYTHON     = "$Private\venv\Scripts\python.exe"
 $env:XQ_COMPAT_RPC_PATH = "$Repo\compat\driver\bridge_rpc.py"
-node --check src/index.mjs
-node --test tests/*.mjs
+npm run check
+npm test
 ```
 
-部分原生测试依赖指定 rc.4 包位置，应先读对应测试的依赖说明。不要把 fake 测试通过等同于新环境微信实机通过，也不要为了 CI 放入真实 provider key、用户库或聊天。公开打包/部署脚本不会自动运行真实微信验收、创建真实笔记或强制模型调用。
+测试用的全是模拟消息和假驱动，覆盖权限隔离、媒体格式、消息身份和原生接口契约。部分测试依赖 rc.4 包的位置，跑之前看一下对应测试文件。测试通过不代表真实微信可用；CI 里也不要放真实 key、记忆库或聊天记录。
 
-## macOS 与迁移边界
+## 关于 macOS
 
-核心策略、会话、媒体和大部分纯逻辑模块尽量保持跨平台。真实 Windows UI 通过显式驱动边界接入；非 Windows 上的真实 Windows 驱动应明确拒绝，fake 可以工作。
+核心逻辑（会话、权限、媒体、记忆）尽量做成跨平台，但**微信操作目前只有 Windows 驱动**。在非 Windows 系统上真实驱动会直接拒绝启动，假驱动可以跑测试。要支持 Mac，需要写一个遵守同样 RPC / ACK / operation 语义的 macOS 驱动，再重新验收。
 
-**没有完成 macOS 微信适配和实机验收。** 迁移 Mac 需要实现相同 RPC/ACK/operation 语义的 macOS 驱动，再验收窗口目标、附件、动画、稳定身份及锁屏行为。复制 Windows `uiautomation` 或打开任意 shell 不能代替这一工作。
+## 来源与许可
 
-## 来源与授权
+见 [NOTICE.md](NOTICE.md)、[docs/PROVENANCE.md](docs/PROVENANCE.md) 和 `vendor/` 下各模块自带的声明。
 
-见 [NOTICE](NOTICE.md)、[来源说明](docs/PROVENANCE.md) 及各 `vendor` 子目录声明。保留适用许可，不把某个 QQ 子插件的 MIT 扩大成整个来源仓库的许可。本仓库不附朋友数据库、用户人格、聊天、私库、凭据或生产日志；公开可见不意味着所有来源具有同一种开源许可。
+本仓库**没有统一的根许可证**。公开可见不等于可以随意复用；各部分按各自的许可和授权处理。某个 QQ 子插件的 MIT 许可只覆盖那个子插件，本仓库也不包含 QQ 实现。
