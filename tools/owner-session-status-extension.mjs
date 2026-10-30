@@ -113,7 +113,7 @@ export function createStatusExtension({
     return {
       closed, boundOwners: entries.size, logicalRevocationOnly: logicalOnly,
       activeRegistrationsWithDisposer: [...entries.values()].filter(entry => entry.unregister).length,
-      lastError, longTaskCoverage: false, scope: 'existing-owner-private-handles'
+      lastError, longTaskCoverage: typeof core.capabilities.isolatedTaskStatusRows==='function', scope: 'existing-owner-handles-and-explicit-task-metadata'
     };
   }
   const extension = Object.freeze({refresh, close, inspect});
@@ -149,7 +149,5 @@ export async function apply(ctx, config = {}, dependencies = {}) {
   });
   try { ctx.effect(() => () => extension.close()); }
   catch (error) { extension.close(); throw error; }
-  // Cordis rc.4 accepts void or an effect disposer here, never an API object.
-  // ctx.effect above already owns cleanup for provider reload/unload.
   return;
 }

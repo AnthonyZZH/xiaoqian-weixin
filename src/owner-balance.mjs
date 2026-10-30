@@ -1,5 +1,11 @@
-import fs from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';
+import fs from 'node:fs';import path from 'node:path';import {pathToFileURL,fileURLToPath} from 'node:url';import crypto from 'node:crypto';
 import {createOwnerToolkit} from '../vendor/owner-tools/index.mjs';
+export function isOwnedProviderShim(name,stateDir){
+ try{const u=new URL(name);if(u.protocol!=='file:')return false;const file=fileURLToPath(u),root=fs.realpathSync(path.join(stateDir,'provider-shim')),base=path.basename(file),match=/^provider-shim-([a-f0-9]{24})\.mjs$/.exec(base);if(!match||fs.lstatSync(file).isSymbolicLink()||fs.statSync(file).size>1024*1024||fs.realpathSync(path.dirname(file))!==root)return false;return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').startsWith(match[1]);}catch{return false;}
+}
+export function selectOfficialProviderEntries(entries,{shimFile,stateDir}){
+ return [...entries].filter(e=>e.options&&e.options.disabled!==true&&(e.options.name==='@deepseek-ai/dsh-llm-deepseek-api-key'||e.options.name===pathToFileURL(shimFile).href||isOwnedProviderShim(e.options.name,stateDir)));
+}
 export function createOwnerBalance({hostCtx,getCore,isCurrentOwner,stateDir,shimFile}){
  const entries=new Map();let capability=null,closed=false;
  const proof=(name,value)=>fs.writeFileSync(path.join(stateDir,name),JSON.stringify(value));
@@ -20,7 +26,7 @@ export function createOwnerBalance({hostCtx,getCore,isCurrentOwner,stateDir,shim
  hostCtx.inject(['xiaoqianOfficialBalance'],inner=>{const value=inner.xiaoqianOfficialBalance;capability=value;for(const e of entries.values())void register(e).catch(()=>{});inner.effect(()=>()=>{if(capability===value)capability=null;for(const e of entries.values()){e.bound?.revoke();e.bound=null;}});});
  // Update only this existing profile entry's module name. Its config/credential references remain untouched.
  hostCtx.inject(['loader'],inner=>{void(async()=>{
-  const rows=[...inner.loader.entries()].filter(e=>e.options.name==='@deepseek-ai/dsh-llm-deepseek-api-key'||e.options.name===pathToFileURL(shimFile).href);
+  const rows=selectOfficialProviderEntries(inner.loader.entries(),{shimFile,stateDir});
   if(rows.length!==1){proof('owner-balance-shim-status.json',{at:new Date().toISOString(),ok:false,code:'OFFICIAL_PROVIDER_ROW_NOT_UNIQUE',count:rows.length});return;}
   const row=rows[0],target=pathToFileURL(shimFile).href,originalName=row.options.name;
   proof('owner-balance-shim-status.json',{at:new Date().toISOString(),state:'loading',entryId:row.id,originalName,shim:target});

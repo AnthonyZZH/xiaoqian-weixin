@@ -14,8 +14,11 @@ export function createCoreSessionSource(core,{clock=Date.now,longTaskRoot=null,e
    if(!core.chats.has(task.chatId))continue;legacyTasks++;const agent=manager.handles?.get(jobId)?.agent;
    rows.push({id:jobId,chatId:task.chatId,sessionId:task.sessionId,kind:'native-task',agent,paused:!!data.paused,observedAt:now,terminal:['completed','failed'].includes(task.status),knownState:task.status==='completed'?'idle':task.status==='failed'?'failed':'unknown',lastOutcome:task.status==='completed'?'completed':task.status==='failed'?'failed':task.status==='unknown'?'unknown':null,startedAt:task.createdAt,lastProgressAt:task.completedAt||task.createdAt,lastError:task.status==='failed'?{code:'TASK_FAILED'}:null});
   }
-  let longTasks=0,metadataBytes=0;
-  if(longTaskRoot){
+  const isolatedSource=core.capabilities?.isolatedTaskStatusRows;
+  if(isolatedSource!==undefined&&typeof isolatedSource!=='function')throw Error('ISOLATED_STATUS_SOURCE_INVALID');
+  const isolatedRows=isolatedSource?isolatedSource():[];if(!Array.isArray(isolatedRows))throw Error('ISOLATED_REGISTRY_INVALID');
+  let longTasks=isolatedRows.length,metadataBytes=0;
+  if(longTaskRoot&&!isolatedSource){
    const root=path.join(longTaskRoot,'native'),owner=[...core.chats.values()].find(c=>c.owner===true);
    if(owner&&fs.existsSync(root)){
     const files=fs.readdirSync(root,{withFileTypes:true});if(files.length>1000)throw Error('LONG_TASK_METADATA_CAPACITY');
@@ -28,7 +31,7 @@ export function createCoreSessionSource(core,{clock=Date.now,longTaskRoot=null,e
    }
   }
   const extra=extraManagedSessions?extraManagedSessions():[];if(!Array.isArray(extra))throw Error('EXTRA_REGISTRY_INVALID');
-  for(const row of extra){if(!core.chats.has(row.chatId))throw Error('EXTRA_SESSION_NOT_BOUND');const index=rows.findIndex(v=>v.kind===row.kind&&v.id===row.id&&v.chatId===row.chatId);if(index>=0)rows[index]={...rows[index],...row};else rows.push(row);}
-  return{rows,coverage:{chatRegistry:true,legacyNativeTasks:true,longTaskRootConfigured:!!longTaskRoot,extraRegistryConfigured:!!extraManagedSessions,legacyTaskRows:legacyTasks,longTaskRows:longTasks,scopeLimit:'No global Harness, Codex or WeChat contact enumeration. Long-task live handles require explicit extra registry attachment.'}};
+  for(const row of [...isolatedRows,...extra]){if(!core.chats.has(row.chatId))throw Error('EXTRA_SESSION_NOT_BOUND');const index=rows.findIndex(v=>v.kind===row.kind&&v.id===row.id&&v.chatId===row.chatId);if(index>=0)rows[index]={...rows[index],...row};else rows.push(row);}
+  return{rows,coverage:{chatRegistry:true,legacyNativeTasks:true,longTaskRootConfigured:!!longTaskRoot,extraRegistryConfigured:!!extraManagedSessions||!!isolatedSource,isolatedTaskRegistry:!!isolatedSource,longTaskFileScanSuppressed:!!longTaskRoot&&!!isolatedSource,legacyTaskRows:legacyTasks,longTaskRows:longTasks,scopeLimit:'No global Harness, Codex or WeChat contact enumeration. Long-task live handles require explicit extra registry attachment.'}};
  };
 }

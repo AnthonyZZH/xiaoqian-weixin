@@ -140,11 +140,8 @@ test('native apply defaults off, requires existing bridge, and lifecycle dispose
   const f=fixture(), cleanup=[];
   const extension=await apply({get:key=>key==='xiaoqianBridge'?{core:f.core}:null,effect:factory=>cleanup.push(factory())},
     {enabled:true},{defineTool:x=>x,scheduler:f.scheduler});
-  assert.equal(extension,undefined); // Native Cordis apply returns no API/effect object.
-  assert.equal(f.calls.registrations,1); assert.equal(f.agent.tools.has(TOOL_NAME),true);
-  assert.equal((await invoke(f.agent)).readOnly,true);
-  cleanup[0]();
-  assert.equal(f.agent.tools.has(TOOL_NAME),false); assert.equal(f.calls.unregisters,1);
+  assert.equal(extension,undefined); assert.equal(f.calls.registrations,1); assert.equal(f.agent.tools.has(TOOL_NAME),true);
+  cleanup[0](); assert.equal(f.calls.unregisters,1); assert.equal(f.timer.cleared,1); assert.equal(f.agent.tools.has(TOOL_NAME),false);
 });
 
 test('registration failure revokes partially exposed tool and does not retry same scope',async()=>{

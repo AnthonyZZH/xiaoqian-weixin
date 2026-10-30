@@ -1,6 +1,7 @@
 import {createOwnerShellIntegration} from './owner-shell.mjs';
 import fs from 'node:fs';
 import {createOwnerProjectFiles} from './owner-project-files.mjs';
+import {createOwnerIsolatedTasks} from './owner-isolated-runtime.mjs';
 import {createOwnerLongTasks} from './owner-long-tasks.mjs';
 import {createOwnerBalance} from './owner-balance.mjs';
 import {buildOfficialBalanceShim} from './balance-shim-builder.mjs';
@@ -25,11 +26,11 @@ export function createOwnerIntegrations({hostCtx,getCore,config,services={}}){
  const management=config.ownerManagement?.enabled===true?(services.nativeManagement||createOwnerNativeManagement({hostCtx,isCurrentOwner:authority,stateDir:config.stateDir,nativePackageRoot:config.nativePackageRoot,python:config.python||'python',acceptanceChecks:false})):null;
  const mediaImport=config.remoteMediaImport?.enabled===true?createOwnerMediaImport({isCurrentOwner:authority,python:config.remoteMediaImport.python,sitePackages:config.remoteMediaImport.sitePackages,mediaRoot:path.join(config.stateDir,'media'),operationRoot:path.join(config.stateDir,'owner-media-import')}):null;
  const projectFiles=config.ownerFiles?.enabled===true?createOwnerProjectFiles({projects:config.ownerFiles.projects,python:config.ownerFiles.python,isCurrentOwner:authority,operationRoot:path.join(config.stateDir,'owner-file-operations')}):null;
- const longTasks=config.longTasks?.enabled===true?createOwnerLongTasks({hostCtx,isCurrentOwner:authority,root:config.longTasks.root,model:config.model}):null;
+ const longTasks=config.longTasks?.enabled===true?(config.longTasks.isolated===true?createOwnerIsolatedTasks({hostCtx,getCore,isCurrentOwner:authority,root:config.longTasks.root,model:config.model}):createOwnerLongTasks({hostCtx,isCurrentOwner:authority,root:config.longTasks.root,model:config.model})):null;
  let balance=null;
- if(config.balance?.enabled===true){try{const shim=buildOfficialBalanceShim({nativePackageRoot:config.nativePackageRoot,outputDir:path.join(config.stateDir,'provider-shim'),billingCollector:config.billingCollector?.enabled===true});balance=createOwnerBalance({hostCtx,getCore,isCurrentOwner:authority,stateDir:config.stateDir,shimFile:shim.file});}catch(error){fs.writeFileSync(path.join(config.stateDir,'balance-unavailable.json'),JSON.stringify({at:new Date().toISOString(),available:false,code:/^[A-Z0-9_]+/.test(error.code||'')?error.code:'BALANCE_INSTALL_UNAVAILABLE'}));}}
+ if(config.balance?.enabled===true||config.longTasks?.isolated===true){try{const shim=buildOfficialBalanceShim({nativePackageRoot:config.nativePackageRoot,outputDir:path.join(config.stateDir,'provider-shim'),billingCollector:config.billingCollector?.enabled===true,isolatedTasks:config.longTasks?.isolated===true});balance=createOwnerBalance({hostCtx,getCore,isCurrentOwner:authority,stateDir:config.stateDir,shimFile:shim.file});}catch(error){fs.writeFileSync(path.join(config.stateDir,'balance-unavailable.json'),JSON.stringify({at:new Date().toISOString(),available:false,code:/^[A-Z0-9_]+/.test(error.code||'')?error.code:'BALANCE_INSTALL_UNAVAILABLE'}));}}
  const groupControl=config.chats.filter(c=>c.mode==='group').length===1;
- const names=[...hostShell.available(),...(groupControl?['wechat_group_control']:[]),'owner_fetch',...(library?LIBRARY_TOOL_NAMES:[]),...(management?management.available():[]),...(mediaImport?mediaImport.available():[]),...(projectFiles?projectFiles.available():[]),...(longTasks?longTasks.available():[]),...(balance?balance.available():[])];
+ const names=[...hostShell.available(),...(groupControl?['wechat_group_control']:[]),'owner_fetch',...(library?LIBRARY_TOOL_NAMES:[]),...(management?management.available():[]),...(mediaImport?mediaImport.available():[]),...(projectFiles?projectFiles.available():[]),...(longTasks?longTasks.available():[]),...(config.balance?.enabled===true&&balance?balance.available():[])];
  return {available:()=>[...names],verifyShellReadOnly:agent=>hostShell.verifyReadOnly(agent),register({agentCtx,agent,chat,defineTool}){
   if(!chat.owner||chat.mode!=='private')return;
   const core=getCore(),bindingId=digest(JSON.stringify([chat.id,chat.title,chat.mode,chat.owner]));
@@ -38,7 +39,7 @@ export function createOwnerIntegrations({hostCtx,getCore,config,services={}}){
   if(groupControl)agentCtx.tools.register(defineTool({name:'wechat_group_control',parameters:{action:{type:'string',required:true}},description:'Owner only: stop/less/resume the single configured authorized group. Stop cancels unsent output; less is contextual, not a timer quota.',output:{schema:{type:'json'},render:(_a,value)=>[{type:'text',text:JSON.stringify(value)}]},execute:(args,exec)=>{if(exec.agent!==agent||exec.signal?.aborted||!authority({agent,bindingId}))throw Error('OWNER_ONLY');return core.controlGroup(args.action);}}));
   if(mediaImport){entry.mediaImport=mediaImport.bind({agent,bindingId,chatId:chat.id});entry.mediaImport.register(agentCtx,defineTool);}
   if(projectFiles){entry.projectFiles=projectFiles.bind({agent,bindingId});entry.projectFiles.register(agentCtx,defineTool);}
-  longTasks?.register({ctx:agentCtx,agent,bindingId,chatId:chat.id,defineTool});balance?.register({ctx:agentCtx,agent,bindingId,defineTool});
+  longTasks?.register({ctx:agentCtx,agent,bindingId,chatId:chat.id,defineTool});if(config.balance?.enabled===true)balance?.register({ctx:agentCtx,agent,bindingId,defineTool});
   if(library){
    registerOwnerLibraryTools({agentCtx,agent,chatId:chat.id,adapter:library,isActive:id=>id===chat.id&&authority({agent,bindingId}),defineTool:definition=>defineTool({...definition,async execute(args,exec){
     if(exec.agent!==agent||!authority({agent,bindingId}))throw Error('OWNER_ONLY');

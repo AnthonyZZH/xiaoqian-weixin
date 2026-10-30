@@ -6,6 +6,13 @@ import {measureEnvelope,METER_VERSION} from './estimated-meter.mjs';
 const sha=v=>crypto.createHash('sha256').update(v).digest('hex');
 const controllers=new Map();
 const failure=code=>Object.assign(Error(code),{code});
+function safeOrigin(value){
+ if(!value||value.target_category!=='owner_private'||!['wake','natural_user','mixed'].includes(value.trigger_type))return null;
+ if(![value.native_turn,value.native_step].every(n=>Number.isSafeInteger(n)&&n>0)||!Number.isSafeInteger(value.native_turn_event_seq)||value.native_turn_event_seq<0)return null;
+ if(!/^[a-f0-9]{64}$/.test(value.native_attempt_hash||'')||!/^[a-f0-9-]{36}$/.test(value.agent_lifecycle||''))return null;
+ if(!Array.isArray(value.source_receipt_hashes)||value.source_receipt_hashes.length<1||value.source_receipt_hashes.length>8||!value.source_receipt_hashes.every(v=>/^[a-f0-9]{64}$/.test(v)))return null;
+ return {target_category:'owner_private',trigger_type:value.trigger_type,native_turn:value.native_turn,native_step:value.native_step,native_turn_event_seq:value.native_turn_event_seq,native_attempt_hash:value.native_attempt_hash,agent_lifecycle:value.agent_lifecycle,source_receipt_hashes:[...value.source_receipt_hashes],link_status:value.trigger_type==='mixed'?'mixed_host_receipts':'host_receipt_and_native_attempt'};
+}
 export function createBillingCollector({root,enabled=true}){
  if(!path.isAbsolute(root||''))throw failure('BILLING_ABSOLUTE_ROOT_REQUIRED');
  root=path.resolve(root);
@@ -31,7 +38,8 @@ export function createBillingCollector({root,enabled=true}){
    const history_policy_sha256=sha(JSON.stringify(body.messages.map(m=>({role:m.role,content:m.role==='system'?m.content:(m.content||[]).filter(v=>['tool_addition','tool_removal'].includes(v.type))})).filter(m=>m.role==='system'||m.content.length)));
    const family=sha(JSON.stringify({provider:'deepseek-official',model:body.model,system_sha256,tools_sha256,policy_sha256,history_policy_sha256,fields}));
    if(pending.size>=64){pending.clear();writeFailures++;return;}
-   pending.set(meta.attempt_id,{model:body.model,family,system_sha256,tools_sha256,policy_sha256,history_policy_sha256,
+   const origin=safeOrigin(binding.origin());
+   pending.set(meta.attempt_id,{origin,model:body.model,family,system_sha256,tools_sha256,policy_sha256,history_policy_sha256,
     meter_input:meter.available?meter.value:null,meter_version:METER_VERSION,meter_available:meter.available});
   },
   append(row){
@@ -56,10 +64,10 @@ export function createBillingCollector({root,enabled=true}){
   }
  });
  const api={
-  register({sessionId,active,policy}){
+  register({sessionId,active,policy,origin=()=>null}){
    if(closed||typeof active!=='function'||typeof policy!=='function')throw failure('BILLING_HOST_BINDING_REQUIRED');
    const id=String(sessionId);if(!id||sessions.has(id))throw failure('BILLING_SESSION_ALREADY_REGISTERED');
-   const binding={hash:sha(id),active,policy};sessions.set(id,binding);
+   const binding={hash:sha(id),active,policy,origin};sessions.set(id,binding);
    let disposed=false;return ()=>{if(!disposed){disposed=true;if(sessions.get(id)===binding)sessions.delete(id);}};
   },
   fetch(baseFetch,context,url,init){

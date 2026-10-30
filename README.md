@@ -250,3 +250,6 @@ npm test
 ## 主人私聊页面锚点恢复
 
 兼容驱动已归档经过 Windows 服务器验证的最新页恢复机制，避免整页无顺序重叠后永久停止接收。保留原 ACK、会话及发送 unknown 状态；停滞期间历史消息未补投。接入配置、恢复步骤、公开副本差异及 12 项 mock 验证见 [恢复说明](docs/owner-anchor-recovery.md)。
+
+
+Recent release: [independent owner tasks and trusted billing origin](docs/isolated-task-release.md). Runtime integration is deployed; real owner task submission, cancellation/result delivery and deployed crash reconciliation remain natural-use acceptance. Automatic rotation stays off.

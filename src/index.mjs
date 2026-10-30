@@ -34,7 +34,7 @@ const fields={
  wechat_memory_edit:{expectedRevision:str('读取结果里的修订号',true),facts:{type:'array',items:{type:'string'},required:true},style:str('聊天风格')},
  wechat_sticker_search:{query:str('表情描述关键词')},
  wechat_sticker_review:{action:str('list/approve/reject/describe',true),id:str('目录ID'),description:str('描述')},
- wechat_persona:{text:str('新的社交人格；省略则读取')},
+ wechat_persona:{expectedRevision:str('Revision returned by persona read; required for writes'),text:str('新的社交人格；省略则读取')},
  wechat_relay:{targetId:str('预先允许的目标ID',true),text:str('要转告的文字',true),at:{type:'array',items:{type:'string'}}},
  wechat_control:{action:str('pause/resume',true)},
  wechat_search:{query:str('搜索词',true)},
@@ -133,7 +133,7 @@ export async function apply(ctx,config={}) {
    },Math.max(500,config.pollMs||2000));
    const tick=setInterval(async()=>{
      if(stopped||ticking||bridge.core.store.data.paused)return;
-     ticking=true;try{await bridge.initiative.tick(e=>bridge.core.wake(e.chatId,e));
+     ticking=true;try{await bridge.core.drainTaskCompletions();await bridge.initiative.tick(e=>bridge.core.wake(e.chatId,e));
        for(const c of config.chats)bridge.evidenceMemory.maintain(c.id);}
      catch{report('WECHAT_INITIATIVE_FAILED');}finally{ticking=false;}
    },Math.max(1000,config.tickMs||10000));

@@ -15,6 +15,7 @@ export function validateState(v){
   assert(Object.keys(c.messages).length<=50000&&Object.keys(c.deliveries).length<=50000);
   for(const [k,m]of Object.entries(c.messages))assert(typeof k==='string'&&k.length<=200&&plain(m)&&['accepting','accepted','unknown','baseline','rejected'].includes(m.status));
   for(const [k,d]of Object.entries(c.deliveries))assert(k.length>0&&k.length<=200&&plain(d)&&['sending','ok','rejected','unknown'].includes(d.status));
+  if(c.taskCompletions!==undefined){assert(plain(c.taskCompletions)&&Object.keys(c.taskCompletions).length<=1000);for(const [key,row]of Object.entries(c.taskCompletions))assert(/^[a-f0-9]{64}$/.test(key)&&plain(row)&&['pending','accepting','accepted','unknown'].includes(row.status)&&typeof row.principal==='string'&&plain(row.payload)&&typeof row.payload.event_id==='string'&&typeof row.payload.task_id==='string'&&JSON.stringify(row.payload).length<=24000);}
   if(c.replyPermits!==undefined){
    assert(plain(c.replyPermits)&&Object.keys(c.replyPermits).length<=50000);
    for(const [key,g]of Object.entries(c.replyPermits)){
