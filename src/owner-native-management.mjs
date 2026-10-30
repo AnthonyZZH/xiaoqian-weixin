@@ -32,7 +32,7 @@ export function createOwnerNativeManagement({hostCtx,isCurrentOwner,stateDir,nat
   const invokePlugin=async(args,exec)=>{
    await auth(exec);
    let result;
-   if(args.action==='indexes'){result={nativeMarketAvailable:!!slots.pluginMarket,native:slots.pluginMarket?await slots.pluginMarket.listIndexes():[],community:COMMUNITY_INDEXES};}
+   if(args.action==='indexes'){result={nativeMarketAvailable:!!slots.pluginMarket,native:slots.pluginMarket?await slots.pluginMarket.listIndexes():[],community:COMMUNITY_INDEXES,note:'Native market availability and community sources are separate. An absent native service does not mean the listed community indexes are unavailable.'};}
    else if(args.action==='search'&&args.installedOnly!==true&&(!args.indexUrl||COMMUNITY_INDEXES.some(v=>v.url===args.indexUrl))){result=await searchCommunityMarket({query:args.query,indexUrl:args.indexUrl,signal:exec.signal});}
    else if(args.action==='search'&&!args.indexUrl){
     if(!slots.pluginManager)throw Error('MANAGER_UNAVAILABLE');
@@ -43,7 +43,7 @@ export function createOwnerNativeManagement({hostCtx,isCurrentOwner,stateDir,nat
   };
   const invokeMcp=async(args,exec)=>{
    await auth(exec);
-   if(args.action==='discover')return {profile:discoverConfiguredMcp(slots),ownerManaged:await mcp.invoke('list',{},exec),credentialsHidden:true};
+   if(args.action==='discover')return {profile:discoverConfiguredMcp(slots),ownerManaged:await mcp.invoke('list',{},exec),credentialsHidden:true,libraryConnectivityInferredFromMcpList:false,note:'This registry does not enumerate independent xiaoqian_library_* adapters. Use xiaoqian_library_health to determine main-library connectivity; an empty managed registry does not mean the library is disconnected.'};
    const result=await calls.run(exec,()=>mcp.invoke(args.action,args,exec));await auth(exec);return result;
   };
   plugin.register(ctx,definition=>defineTool({...definition,parameters:{...definition.parameters,installedOnly:{type:'boolean'}},execute:invokePlugin}));

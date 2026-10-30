@@ -2,5 +2,10 @@
   "sourceCommit": "31d600923536d01df6702a344ae8b9abf2dc2235",
   "compatibilityDriverSha256": "de3bba346075a9c8704ae9ecee7b963d8490bac5def489ff3a581f8326339e06",
   "productionDriverMigration": "pinned-generation; fulltext-v2 not enabled",
-  "runtimeDataIncluded": false
+  "runtimeDataIncluded": false,
+  "hotfixCoreCommit": "02791fa0059e452f95a117187fb1bc15c071c434",
+  "integratedFixes": [
+    "lossless-native-plugin-list",
+    "independent-registry-scope-notes"
+  ]
 }
