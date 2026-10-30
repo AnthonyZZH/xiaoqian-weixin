@@ -186,9 +186,22 @@ export class WeChatCore {
     requireValue(typeof wakeId==='string'&&wakeId.length>0,'WAKE_ID_REQUIRED');
     const key='wake:'+digest(wakeId);if(s.messages[key])return {status:'duplicate'};
     const h=await this.handle(chatId),nativeMessageId='message-'+crypto.randomUUID();const grantId=this.permits.issue(chatId,{sourceId:wakeId,nativeMessageId,kind:'proactive',wakeId});s.messages[key]={status:'accepting',nativeMessageId,grantId};this.store.save();
-    try{h.agent.followup({id:nativeMessageId,role:'user',content:[{type:'text',text:'主动聊天检查：'+JSON.stringify({reason:context.reason||'opening',idleMinutes:context.idleMinutes,unanswered:context.unanswered})+'。结合本会话判断是否值得说；不值得就不调用回复工具。'}],source:{kind:'xiaoqian-initiative'}});await this.flush(h.agent);s.messages[key].status='accepted';s.pendingWake={wakeId,reason:context.reason||'opening'};}
+    try{h.agent.followup({id:nativeMessageId,role:'user',content:[{type:'text',text:'主动聊天检查：'+JSON.stringify({reason:context.reason||'opening',idleMinutes:context.idleMinutes,unanswered:context.unanswered})+'。结合本会话判断是否值得说；不值得联系必须调用 wechat_skip；值得联系才调用 wechat_reply。每次检查都必须明确完成决策，不需要向主人询问是否联系。'}],source:{kind:'xiaoqian-initiative'}});await this.flush(h.agent);s.messages[key].status='accepted';s.pendingWake={wakeId,reason:context.reason||'opening'};}
     catch(e){s.messages[key].status='unknown';this.permits.close(chatId,grantId,'followup-unknown');this.store.save();throw e;}
     this.store.audit('WAKE',chat.id);return {status:'ok'};
+  });}
+  async completeWakeWithoutDecision(chatId,{wakeId,grantId,turn}) { return this.serial(async()=>{
+    if(this.closed||this.store.data?.paused)return false;
+    const s=this.state(chatId),g=s.replyPermits?.[grantId];
+    if(s.pendingWake?.wakeId!==wakeId||!g||g.wakeId!==wakeId||g.kind!=='proactive'||g.turn!==turn||g.remaining!==0||g.status!=='turn-ended')return false;
+    if(Object.values(s.deliveries||{}).some(d=>d.grantId===grantId))return false;
+    const settled=await this.initiative.completed(chatId,wakeId);
+    if(!settled)return false;
+    s.pendingWake=null;
+    const receipt=s.messages['wake:'+digest(wakeId)];
+    if(receipt)receipt.decision='completed_without_decision';
+    this.store.audit('WAKE_COMPLETED_WITHOUT_DECISION',chatId,{wakeId,turn});
+    return true;
   });}
   async send(chatId,{text,stickerId,at=[],deliveryId,proactive=false}={},context={}) { return this.serial(async()=>{
     requireValue(!context.signal?.aborted,'TOOL_CANCELLED');

@@ -17,13 +17,21 @@ export class OwnerDecisionBridge extends ScheduleBridge {
   async expire(event,claim){
     if(this.paused||this.claims.get(event.chatId)!==claim)return;
     try{
-      await this.onTimeout(event);
+      const matched=await this.onTimeout(event);
+      if(!matched)return;
       await this.request('schedule_finish',{targetId:event.chatId,eventId:claim.eventId,token:claim.token,outcome:'declined',decision:'decision_timeout'});
     }finally{
       this.clearDeadline(event.chatId);clearInterval(claim.timer);this.claims.delete(event.chatId);
       // A failed finish leaves an expiring claim; the durable scheduler records
       // abandoned_lease and gives a fresh future due without reusing this wake.
     }
+  }
+  async completed(chatId,wakeId){
+    const claim=this.claims.get(chatId);
+    if(!claim||claim.eventId!==wakeId||claim.reservation)return false;
+    const result=await this.request('schedule_finish',{targetId:chatId,eventId:wakeId,token:claim.token,outcome:'declined',decision:'completed_without_decision'});
+    if(!result.finished)return false;
+    this.clearDeadline(chatId);clearInterval(claim.timer);this.claims.delete(chatId);return true;
   }
   async tick(onWake){return super.tick(async event=>{
     const result=await onWake(event);

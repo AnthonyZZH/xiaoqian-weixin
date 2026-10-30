@@ -1,3 +1,5 @@
+import {bindOwnerBilling} from './billing/owner-binding.mjs';
+import {createBillingCollector} from './billing/collector.mjs';
 import {createOwnerIntegrations} from './owner-integrations.mjs';
 import {createOwnerRotation} from './owner-rotation.mjs';
 import {createOwnerSupplements} from './owner-supplements.mjs';
@@ -79,7 +81,10 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
  const importer=new LegacyImporter({features,media,archiveRoot:path.join(root,'legacy-archive'),chats:config.chats,allowedMediaRoot:config.mediaImportRoot||null});
  const evidenceMemory=new EvidenceMemory({root:path.join(root,'evidence-memory'),chats:config.chats});
  capabilities={...createCapabilities({config,media,generatedRoot,python:config.python||'python'}),...capabilities};
- let core; const ownerRotation=config.rotation?.enabled===true?createOwnerRotation({hostCtx:ctx,getCore:()=>core,config}):null;
+ let core;
+ if(config.billingCollector?.enabled===true&&!(config.ownerIntegrations?.enabled===true&&config.balance?.enabled===true))throw Error('BILLING_BALANCE_SHIM_INTEGRATION_REQUIRED');
+ const billingCollector=config.billingCollector?.enabled===true?createBillingCollector({root:config.billingCollector.root}):null;
+ const ownerRotation=config.rotation?.enabled===true?createOwnerRotation({hostCtx:ctx,getCore:()=>core,config}):null;
  const ownerIntegrations=config.ownerIntegrations?.enabled===true?createOwnerIntegrations({hostCtx:ctx,getCore:()=>core,config,services:ownerServices}):null;
  const ownerSupplements=await createOwnerSupplements({getCore:()=>core,config,services:ownerServices});
  capabilities={...capabilities,ownerSupplements,ownerSearchTool:ownerSupplements.available().includes('owner_search'),ownerNativeTools:[...new Set([...(capabilities.ownerNativeTools||[]),...ownerSupplements.available(),...(ownerIntegrations?.available()||[])])]};
@@ -92,6 +97,7 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
  if(!defineTool)({defineTool}=await import(config.nativePackageRoot?pathToFileURL(path.join(config.nativePackageRoot,'dsh-tools/lib/index.js')).href:'@deepseek-ai/dsh-tools'));
  core=new WeChatCore({stateDir:path.join(root,'bridge'),chats:config.chats,agents:ctx.agents,sessions:ctx.sessions,driver:ui,media,features,evidenceMemory,initiative,capabilities,model:config.model,
    registerAgent:async(agentCtx,agent,chat,bridge)=>{
+     bindOwnerBilling({collector:billingCollector,getCore:()=>core,agentCtx,agent,chat});
      ownerSupplements.register({agentCtx,agent,chat,defineTool});ownerIntegrations?.register({agentCtx,agent,chat,defineTool});ownerRotation?.register({agent,chat,defineTool});
      for(const toolName of allowedTools(chat,capabilities)){
        if(!fields[toolName])continue;
@@ -108,8 +114,8 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
        }));
      }
    }});
- const originalClose=core.close.bind(core);let closing;core.close=()=>closing??=(async()=>{ownerSupplements.close();ownerRotation?.close();await ownerIntegrations?.close();return originalClose();})();
- return {core,driver:ui,media,features,evidenceMemory,initiative,importer,taskManager,ownerSupplements,ownerRotation,ownerIntegrations};
+ const originalClose=core.close.bind(core);let closing;core.close=()=>closing??=(async()=>{billingCollector?.close();ownerSupplements.close();ownerRotation?.close();await ownerIntegrations?.close();return originalClose();})();
+ return {core,driver:ui,media,features,evidenceMemory,initiative,importer,taskManager,ownerSupplements,ownerRotation,ownerIntegrations,billingCollector};
 }
 export async function apply(ctx,config={}) {
  if(config.enabled!==true)return;

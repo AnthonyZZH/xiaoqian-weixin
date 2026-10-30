@@ -134,7 +134,7 @@ class Scheduler(BaseScheduler):
             self._record_schedule(db, p, now, status)
 
     def finish(self, event_id, token, outcome, *, now=None, decision=None):
-        if decision not in (None, 'decision_timeout') or decision and outcome != 'declined':
+        if decision not in (None, 'decision_timeout', 'completed_without_decision') or decision and outcome != 'declined':
             raise ValueError('invalid decision reason')
         self._finish_reasons = getattr(self, '_finish_reasons', {})
         if decision:

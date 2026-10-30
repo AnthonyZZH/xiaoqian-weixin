@@ -32,7 +32,11 @@ export class ReplyPermits {
         if(hit){active.grantId=hit[0];hit[1].turn=active.turn;this.core.store.save();}
       }
       if(event.type==='turn/end'&&event.data.turn===active.turn){
+        const grant=this.table(id)[active.grantId];
+        const undecided=grant?.kind==='proactive'&&grant.status==='open'&&grant.remaining>0&&event.data.reason?.kind==='completed';
+        const receipt={wakeId:grant?.wakeId,grantId:active.grantId,turn:active.turn};
         this.close(id,active.grantId,'turn-ended');this.active.delete(id);
+        if(undecided)void this.core.completeWakeWithoutDecision(id,receipt).catch(()=>{if(this.core.closed)return;try{this.core.store.audit('WAKE_COMPLETION_SETTLE_FAILED',id,{wakeId:receipt.wakeId,turn:receipt.turn});}catch{/* Secondary audit failure must not create an unhandled rejection. */}});
       }
     });
   }
