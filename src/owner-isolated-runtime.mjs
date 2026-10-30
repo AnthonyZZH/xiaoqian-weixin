@@ -1,3 +1,4 @@
+import {taskInputIds} from '../vendor/isolated-owner/input-receipt.mjs';
 import {IsolatedOwnerTasks,registerTaskTools} from '../vendor/isolated-owner/isolated-owner.mjs';
 import {PersonaCAS,blockLegacyOwnerPersonaWrites} from '../vendor/isolated-owner/persona-cas.mjs';
 import {digest} from './state.mjs';
@@ -34,7 +35,7 @@ export function createOwnerIsolatedTasks({hostCtx,getCore,isCurrentOwner,root,mo
    const snap=await query.readSession(sessionId),events=snap.events??[];
    const accepted=events.some(e=>e.type==='user/message'&&e.data?.id===messageId||e.type==='agent/inbox/spliced'&&e.data?.inserted?.some(m=>m.id===messageId));
    if(!accepted)return {state:'unknown'};
-   const inputIds=new Set(events.flatMap(e=>e.type==='user/message'?[e.data?.id]:e.type==='agent/inbox/spliced'?(e.data?.inserted??[]).filter(m=>m.role==='user').map(m=>m.id):[]));
+   const inputIds=taskInputIds(events);
    if([...inputIds].some(id=>id!==messageId))return {state:'unknown'};
    // This release supports no-effect reasoning/persona tasks only.
    if(events.some(e=>/tool.*(call|execute|result)/.test(e.type)))return {state:'unknown'};

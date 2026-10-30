@@ -1,7 +1,7 @@
 {
   "schema": "xiaoqian.runtime-source-map/v1",
-  "applicationSnapshot": "a1054484c001eb754a59567a1ede42ff554ec5cf",
-  "canonicalCore": "2571339903ea6f6ec8059d2536da5baa9bf68d54",
+  "applicationSnapshot": "ddbf2f8464b01ec293baa3c065cc5a93892455ff",
+  "canonicalCore": "ddbf2f8464b01ec293baa3c065cc5a93892455ff",
   "normalization": "UTF-8 LF application sources",
   "files": {
     "src/balance-shim-builder.mjs": "07479387bd319cc881851d1e7adbbcdac69c84293862455e6dd4ef65f7b93f28",
@@ -23,7 +23,7 @@
     "src/owner-community-market.mjs": "23ccb4b95007e38f1629a1c4604aa2963760683bf4090f806661094a2163f4a5",
     "src/owner-decision-bridge.mjs": "e16a1b318ad019e30f67a7a1b53ab2d27476bce793ecede81cfb9b3b143245b2",
     "src/owner-integrations.mjs": "b75de7af9884287f7b2071f130abd60917cce819e2cc357691850e4674507769",
-    "src/owner-isolated-runtime.mjs": "4cc00bc5ec8440aaebc450e31a32c0e32102db9f084d25817f8008c74a0be2fa",
+    "src/owner-isolated-runtime.mjs": "f0ccaea618664d8d7c143d4f86810aba6fc2f6077c09a5dd6759723573d1a156",
     "src/owner-long-tasks.mjs": "caa5e975f311ccfaf5075eb14a92d484adeabf50d53563052f597dd7743ba1bb",
     "src/owner-media-import.mjs": "6ce951334e4322a7f44dd552bfa718f97bcc64ace756942047f3458c6507f96b",
     "src/owner-native-management.mjs": "e6cbdd75e9c2a4925d02a567ce93462d4c8799a96ce80216b17eaa1e2dffe279",
@@ -50,8 +50,9 @@
     "driver/worker.py": "818e4d1450576706eec47d7ffe3d260e260b86d0c6cb235377126479035911e0",
     "vendor/calendar-2026.json": "f05ea3567be1b82727e9ad51748c794528462db2b02cd30e9338dd35d5bc9ebb",
     "vendor/owner_wake_policy.py": "0d692144026f71d79b9d8b3106bcb540dfcc7bd648e9dbf8c0b6d4ec04e2fbe0",
+    "vendor/isolated-owner/input-receipt.mjs": "caf846efcad2ca7deffe36682415f0f64b9344333481ec3965d1e30ef040f881",
     "vendor/isolated-owner/isolated-owner.mjs": "b8d76d81d386028be597c984d4f5ebd855221a8b9b5e7f3b88428957eca26fcd",
-    "vendor/isolated-owner/native-worker.mjs": "24c43dbc9149b8e86c61c77c2896d31a4f3c0c11ba75eaa32ecf1ff21878067c",
+    "vendor/isolated-owner/native-worker.mjs": "2b7688c468448b73ae8d5343a15e73425c28da0b01a3a2126b9c4d97a88d470e",
     "vendor/isolated-owner/persona-cas.mjs": "4bb73353ed7feb3f212c067e0e8be4ae3e97f6eb9ce80b9699b49c8f59127006",
     "vendor/isolated-owner/wire-budget.mjs": "c79bf1d449e08e5279ba373d6f5685bc12af1b58acb0eecee859034d237fe031",
     "vendor/library-adapter/index.mjs": "d35f49712a6507165970db451db7ecac409634137627c15c4e52f0f7e30b4387",
@@ -122,7 +123,7 @@
     "tools/group-addressed-policy/index.mjs": "696a0fce7ef14125070be0d835f92d2107c91805947fb788abda310a6993b3fd",
     "tools/group-addressed-policy/test.mjs": "1ba3f4dc2c085989b95d7011106938e6406d25950bf11ffd0410332d52b9b7af"
   },
-  "applicationAggregateSha256": "5b36e77eb33dd860b19c176cdf57be0e8529b32a1499ea3d7a5ec5692c94e104",
+  "applicationAggregateSha256": "b15d71a9edcd1f68f4e35798f7cd26c8d51f8fcaea5e54dcdc86a038146278d4",
   "externalRpcFiles": {
     "driver/bridge_rpc.py": "de3bba346075a9c8704ae9ecee7b963d8490bac5def489ff3a581f8326339e06",
     "driver/worker.py": "80c13fa9ff9e679f8777cb41d0276e724922226e9f2aba93f84bf43c1e7c4b95",
@@ -156,12 +157,13 @@
     "vendor/session-rotation/xq_session_rotation/__init__.py": "7fc26e5d872c945af67d443e0a389d53acbce7f76c9053d72e04854b16c66c1c"
   },
   "externalRpcAggregateSha256": "3dff226668de0dfad81b053c2cd57ed5cbf4c9e321465cacddb410fc7dc91f2a",
-  "externalRpcNote": "Separately pinned Windows compatibility driver, not presumed byte-identical to portable adapter. Preserve identity ledgers and addressing policy.",
   "sourceAcceptance": {
-    "targetedOfflineSdkTests": 64,
+    "maintenanceRelevantSdkChecks": 36,
+    "receiptSpoofChecks": 3,
     "paidModelProbes": 0,
     "wechatTestSends": 0
   },
+  "runtimeChangeScope": "three input-receipt compatibility modules only; full approval transport not enabled",
   "naturalOwnerTaskAcceptance": "pending",
   "automaticRotationEnabled": false
 }

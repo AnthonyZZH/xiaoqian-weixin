@@ -253,3 +253,5 @@ npm test
 
 
 Recent release: [independent owner tasks and trusted billing origin](docs/isolated-task-release.md). Runtime integration is deployed; real owner task submission, cancellation/result delivery and deployed crash reconciliation remain natural-use acceptance. Automatic rotation stays off.
+
+Maintenance: [SDK task input context compatibility](docs/TASK-INPUT-SDK-COMPAT.md) is deployed. It preserves rejection of genuinely queued extra input; it does not enable the separate plugin/MCP approval transport.

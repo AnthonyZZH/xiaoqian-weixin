@@ -1,3 +1,4 @@
+import {taskInputReceiptMatches} from './input-receipt.mjs';
 import fs from 'node:fs';import path from 'node:path';import {atomic} from './persona-cas.mjs';
 export class NativeWorker{
  idempotent=true;
@@ -59,7 +60,7 @@ export class NativeWorker{
      report(.15);await handle.agent.whenIdle();check();if(combined.aborted)throw Error('TASK_CANCELLED');
      if(await this.host.sessions.flush(handle.agent.session)!==true)throw Object.assign(Error('OUTPUT_FLUSH_UNKNOWN'),{uncertain:true});
      const messages=handle.agent.session.deriveMessages();
-     if(messages.some(m=>m.role==='user'&&m.id!==row.messageId))throw Error('TASK_EXTRA_INPUT_REQUIRES_REVIEW');
+     if(!taskInputReceiptMatches(handle.agent.session,row.messageId))throw Error('TASK_EXTRA_INPUT_REQUIRES_REVIEW');
      const answer=[...messages].reverse().find(m=>m.role==='assistant');
      const text=answer?.content?.filter(v=>v.type==='text').map(v=>v.text).join('\n');
      if(typeof text!=='string'||!text.trim()||text.length>64000)throw Error('TASK_RESULT_INVALID');
