@@ -19,6 +19,14 @@
 > 这是**只含源码的公开快照**，不含任何聊天记录、人格、记忆库、凭据或日志。基础提交记录在 [`SOURCE.json`](SOURCE.json)。
 > 代码能跑测试 ≠ 已经在你的机器上和真实微信跑通，部署后请自己验收。
 
+## 小千全家桶
+
+| 仓库 | 是什么 |
+|---|---|
+| **小千微信 · Harness Native**（当前） | 小千本体：微信桥接、会话、工具、权限 |
+| [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill) | 把本仓库部署到 Windows 桌面的完整流程：安装、升级、迁移、健康检查、回退 |
+| [她的图书馆](https://github.com/AnthonyZZH/ai-memory-public) | 多个 AI 共用的长期记忆库（basic-memory + MCP），小千的 main 图书馆就接这里 |
+
 ## 架构
 
 ```mermaid
@@ -97,6 +105,8 @@ docs/      配置模板、来源说明
 
 ## 快速开始
 
+想让 Codex 帮你一步步部署，可以直接用 [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill)。手动部署按下面走。
+
 下面的路径只是示例，换成你自己的。**聊天、人格、记忆、日志等所有运行数据都放在仓库目录外面。**
 
 ### 1. 安装依赖
@@ -163,9 +173,9 @@ node "$HostRoot\node_modules\@deepseek-ai\dsh\lib\bin.js" `
 
 ## main 图书馆（可选）
 
-本仓库只有客户端，不带 basic-memory 服务和任何笔记。
+本仓库只有客户端，不带 [basic-memory](https://github.com/basicmachines-co/basic-memory) 服务和任何笔记。图书馆本身的搭建方法、目录模板和多 AI 共用配置见 [她的图书馆](https://github.com/AnthonyZZH/ai-memory-public)。
 
-- 自己部署 basic-memory，**只监听本机** `127.0.0.1:8767/mcp`，固定用 main 项目。别为了连上就开到公网。
+- 按图书馆仓库的说明部署 basic-memory，**只监听本机** `127.0.0.1:8767/mcp`，固定用 main 项目。别为了连上就开到公网。
 - health 检查用库里真实存在的笔记做锚点；锚点不存在是配置问题，不代表记忆丢了。
 - 写入时校验目标和校验和，写完读回确认；结果不明时不盲目重试，也不覆盖已有笔记。
 - 群聊和其他私聊不会继承 main，更不会接到私密库。
