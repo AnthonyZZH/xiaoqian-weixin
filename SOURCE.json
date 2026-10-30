@@ -6,7 +6,9 @@
   "hotfixCoreCommit": "02791fa0059e452f95a117187fb1bc15c071c434",
   "integratedFixes": [
     "lossless-native-plugin-list",
-    "independent-registry-scope-notes"
+    "independent-registry-scope-notes",
+    "owner-request-attested-host-powershell",
+    "owner-shell-acceptance-race"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -17,5 +19,11 @@
       "explicit trusted owner configuration replaces deployment-only name pin",
       "incident diagnostics and draft-clearing hook excluded"
     ]
+  },
+  "ownerShellOrigin": {
+    "sha256": "43a368faa9242e1d9d9441f2cc16dc533b1a38606e9deda3874e75eb34921858",
+    "admissionWaitMs": 2000,
+    "runtimeDataIncluded": false,
+    "defaultEnabled": false
   }
 }

@@ -71,7 +71,7 @@ flowchart LR
 | ⚠️ | 动图 | 能保留 GIF / APNG / WebP 原文件；还不能自动抓取微信里收到的原动图 |
 | ⚠️ | 上下文轮换 | 代码已有，**自动轮换默认关闭** |
 | ⚠️ | 生图、其他模型 | 可选，不配置就不可用 |
-| ❌ | 任意 shell | **不开放**。`owner_command` 是结构化命令，不是 PowerShell |
+| ✅ | 任意 shell | 已认证主人私聊可在明确批准后启用 `owner_powershell`；模板默认关闭。保留原生输入来源、精确参数、超时/取消和 Job 回收校验。它使用现有宿主身份，Job 并非 OS 沙箱。见[接入说明](docs/owner-shell-origin.md) |
 | ❌ | macOS | 没有 Mac 版驱动，也没在 Mac 上测过 |
 
 > 💡 搜索不用付费 API，但把网页正文喂给模型照样耗 token；主动聊天和长任务也一样会产生模型费用。

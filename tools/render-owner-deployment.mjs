@@ -7,6 +7,7 @@ if(options['group-title'])config.chats.push({id:'bread-group',title:options['gro
 if(options['main-library']==='true')config.library={url:'http://127.0.0.1:8767/mcp'};
 if(options['adapter-root']){if(!path.isAbsolute(options['adapter-root']))throw Error('ABSOLUTE_ADAPTER_REQUIRED');config.legacyDir=options['adapter-root'];}
 if(options['driver-rpc']){if(!path.isAbsolute(options['driver-rpc']))throw Error('ABSOLUTE_DRIVER_RPC_REQUIRED');config.driverRpcPath=options['driver-rpc'];}
+if(options['owner-shell']==='true'){if(!path.isAbsolute(options['shell-approval-file']||'')||!path.isAbsolute(options['base-python']||''))throw Error('PRIVATE_SHELL_APPROVAL_AND_PYTHON_REQUIRED');config.ownerShell={enabled:true,approvalFile:options['shell-approval-file'],python:options['base-python']};}
 if(options.balance==='true')config.balance={enabled:true};
 if(options['long-tasks']==='true'){if(!path.isAbsolute(options['task-root']||''))throw Error('ABSOLUTE_TASK_ROOT_REQUIRED');config.longTasks={enabled:true,root:options['task-root']};}
 if(options['owner-files']==='true'){if(!path.isAbsolute(options['work-root']||'')||!path.isAbsolute(options['base-python']||''))throw Error('DEDICATED_WORK_ROOT_AND_PYTHON_REQUIRED');config.ownerFiles={enabled:true,python:options['base-python'],projects:{'owner-work':options['work-root']}};}

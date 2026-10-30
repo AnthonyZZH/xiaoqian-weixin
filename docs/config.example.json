@@ -5,12 +5,23 @@
   "startPaused": true,
   "stateDir": "ABSOLUTE_PRIVATE_STATE_DIRECTORY",
   "timeZone": "Asia/Shanghai",
-  "model": {"provider": "deepseek", "model": "deepseek-chat"},
+  "model": {
+    "provider": "deepseek",
+    "model": "deepseek-chat"
+  },
   "chats": [
-    {"id": "synthetic_owner", "title": "REPLACE_WITH_REVIEWED_WINDOW_TITLE", "mode": "private", "owner": true}
+    {
+      "id": "synthetic_owner",
+      "title": "REPLACE_WITH_REVIEWED_WINDOW_TITLE",
+      "mode": "private",
+      "owner": true
+    }
   ],
   "ownerNativeTools": [],
   "ownerTaskTools": [],
   "mediaAllowStaticCapture": false,
-  "initiative": {}
+  "initiative": {},
+  "ownerShell": {
+    "enabled": false
+  }
 }
