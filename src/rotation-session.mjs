@@ -1,0 +1,39 @@
+import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
+import {atomicWrite} from './state.mjs';
+const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
+const put=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));fs.renameSync(t,p);};
+export function rotationRevision(core,chatId){const s=core.state(chatId);return sha(JSON.stringify({sessionId:s.sessionId,binding:s.binding,messages:s.messages,deliveries:s.deliveries,persona:core.features?.persona(chatId),permissions:core.capabilities.ownerNativeTools||[],pendingWake:s.pendingWake||null,nativeSeq:core.handles.get(chatId)?.agent.session.seq,taskVersion:core.rotationTasksVersion?.()||null}));}
+export function createRotationSession({core,chatId,root,hostCtx}){
+ fs.mkdirSync(root,{recursive:true});const candidates=new Map(),retirements=new Set(),retirementErrors=[];
+ const f=op=>path.join(root,sha(op)+'.json'),row=op=>fs.existsSync(f(op))?JSON.parse(fs.readFileSync(f(op),'utf8')):null;
+ const idle=()=>{const s=core.state(chatId),h=core.handles.get(chatId);return h?.agent.status==='idle'&&!h.agent.inbox.nextTurn.length&&!h.agent.inbox.nextStep.length&&!s.pendingWake&&!Object.values(s.deliveries).some(d=>d.status==='sending');};
+ const actual=async h=>{const assembly=await h.agent.ctx.systemPrompt.assemble({scope:h.agent,agent:h.agent});const section=assembly.sections.find(v=>v.name==='xiaoqian-rotation-handoff');if(section?.text){const h=JSON.parse(section.text),persona=assembly.sections.find(v=>v.name==='xiaoqian-persona');if(!persona?.text?.includes(h.persona_text)||!h.owner_permissions.every(name=>assembly.tools.some(t=>t.name===name)))throw Error('HANDOFF_PERSONA_OR_PERMISSIONS_NOT_EFFECTIVE');}return {agent_id:h.agent.id,handoff_payload:section?.text||'',dormant:h.agent.status==='idle'&&!h.agent.inbox.nextTurn.length&&!h.agent.inbox.nextStep.length};};
+ const ports={
+  async acquire_safe_point(snapshot,operation){return core.serial(async()=>{const s=core.state(chatId);if(!idle()||s.rotationFence||s.rotationUncertain||rotationRevision(core,chatId)!==snapshot.revision){const a=core.handles.get(chatId)?.agent;put(path.join(root,'safe-point-diagnostic.json'),{agentStatus:a?.status,nextTurn:a?.inbox.nextTurn.length,nextStep:a?.inbox.nextStep.length,pendingWake:!!s.pendingWake,fence:!!s.rotationFence,uncertain:!!s.rotationUncertain,sending:Object.values(s.deliveries).filter(v=>v.status==='sending').length,revisionMatch:rotationRevision(core,chatId)===snapshot.revision,capturedSeq:snapshot.transcript.length?JSON.parse(snapshot.transcript.at(-1)[2]).seq+1:0,currentSeq:a?.session.seq,sessionMatches:snapshot.session_id===s.sessionId,bindingMatches:snapshot.owner_id===s.binding,personaMatches:snapshot.persona_version===sha(core.features.persona(chatId)),messagesMatch:snapshot.inbound_revision===sha(JSON.stringify(s.messages)),newEventTypes:Array.from({length:Math.max(0,a.session.seq-(snapshot.transcript.length?JSON.parse(snapshot.transcript.at(-1)[2]).seq+1:0))},(_,i)=>a.session.eventAt((snapshot.transcript.length?JSON.parse(snapshot.transcript.at(-1)[2]).seq+1:0)+i)?.type)});return null;}s.rotationFence={operation,snapshot:snapshot.snapshot_digest||null,pid:process.pid};core.store.save();put(f(operation),{operation,stage:'fenced',snapshotDigest:snapshot.snapshot_digest,old: s.sessionId});return {operation,revision:snapshot.revision};});},
+  async is_current(lease,snapshot){return core.state(chatId).rotationFence?.operation===lease.operation&&idle()&&core.state(chatId).rotationFence?.snapshot===snapshot.snapshot_digest&&rotationRevision(core,chatId)===snapshot.revision;},
+  async create_dormant(payload,operation){
+   const prior=row(operation);if(prior?.newAgent)return ports.read_agent(prior.newAgent);
+   const id='wechat-rotation-'+sha(operation).slice(0,32),record={...prior,operation,newAgent:id,handoff:payload,stage:'creating'};put(f(operation),record);
+   let handle;try{handle=await core.openHandle(chatId,{sessionId:id,created:false,handoff:payload});if(await hostCtx.sessions.flush(handle.agent.session)!==true)throw Error('DORMANT_FLUSH_UNCONFIRMED');}catch(error){error.uncertain=true;throw error;}
+   candidates.set(id,handle);record.stage='dormant';put(f(operation),record);return actual(handle);
+  },
+  async lookup_created(operation){const r=row(operation);if(!r?.newAgent)return null;if(r.stage==='creating'&&!candidates.has(r.newAgent))throw Object.assign(Error('CREATE_UNCERTAIN'),{uncertain:true});return ports.read_agent(r.newAgent);},
+  async read_agent(id){const owned=core.handles.get(chatId);let h=candidates.get(id)||(owned?.agent.id===id?owned:null);if(!h){const r=fs.readdirSync(root).filter(v=>v.endsWith('.json')).map(v=>JSON.parse(fs.readFileSync(path.join(root,v),'utf8'))).find(v=>v.newAgent===id);if(!r||r.stage==='creating')throw Object.assign(Error('CANDIDATE_UNCERTAIN'),{uncertain:true});h=await core.openHandle(chatId,{sessionId:id,created:true,handoff:r.handoff});candidates.set(id,h);}return actual(h);},
+  async commit_rotation(lease,snapshot,newAgent,operation){return core.serial(async()=>{
+   if(!await ports.is_current(lease,snapshot))throw Error('SNAPSHOT_CHANGED');const r=row(operation),h=candidates.get(newAgent),check=await actual(h);if(!check.dormant||check.handoff_payload!==r.handoff)throw Error('CANDIDATE_CHANGED');
+   const oldHandle=core.handles.get(chatId),next=structuredClone(core.store.data),s=next.chats[chatId],handoff=JSON.parse(r.handoff);if(handoff.snapshot_digest!==snapshot.snapshot_digest&&snapshot.snapshot_digest)throw Error('SNAPSHOT_DIGEST_CHANGED');
+   const receipt={operation_id:operation,old_agent_id:snapshot.agent_id,new_agent_id:newAgent,committed:true,snapshot_digest:handoff.snapshot_digest};
+   s.rotationCommits??={};s.rotationCommits[operation]=receipt;s.rotationHistory??=[];s.rotationHistory.push({sessionId:s.sessionId,operation});s.sessionId=newAgent;s.created=true;s.rotationHandoff=r.handoff;s.rotationCounters={turnOffset:snapshot.completed_turns,tokenOffset:snapshot.observed_tokens};
+   // One authoritative atomic fsynced state replacement includes route and commit receipt.
+   try{atomicWrite(core.store.file,next);}catch(error){error.uncertain=true;throw error;}
+   core.store.data=next;core.handles.set(chatId,h);candidates.delete(newAgent);put(f(operation),{...r,stage:'committed'});const retiring=oldHandle.dispose().catch(error=>retirementErrors.push(error)).finally(()=>retirements.delete(retiring));retirements.add(retiring);return receipt;
+  });},
+  async lookup_switch(operation){const disk=JSON.parse(fs.readFileSync(core.store.file,'utf8')),receipt=disk.chats[chatId]?.rotationCommits?.[operation];if(!receipt)return null;if(disk.chats[chatId].sessionId!==receipt.new_agent_id)throw Object.assign(Error('ROUTE_RECEIPT_CONFLICT'),{uncertain:true});const candidate=candidates.get(receipt.new_agent_id);if(candidate){core.store.data=disk;core.handles.set(chatId,candidate);candidates.delete(receipt.new_agent_id);}return receipt;},
+  async current_agent(){return core.state(chatId).sessionId;},
+  async release_safe_point(lease,operation){if(core.state(chatId).rotationFence?.operation===operation){delete core.state(chatId).rotationFence;core.store.save();}},
+  async release_operation_fence(operation){return ports.release_safe_point(null,operation);},
+  async contain_uncertain(_id,operation){core.state(chatId).rotationUncertain={operation};core.store.save();},
+  async clear_uncertain(_id,operation){if(core.state(chatId).rotationUncertain?.operation===operation){delete core.state(chatId).rotationUncertain;core.store.save();}},
+ };
+ return {ports,async close(){await Promise.allSettled([...candidates.values()].map(h=>h.dispose()));candidates.clear();await Promise.all([...retirements]);if(retirementErrors.length)throw new AggregateError(retirementErrors,'OLD_AGENT_DISPOSAL_FAILED');}};
+}

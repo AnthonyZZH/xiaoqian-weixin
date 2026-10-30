@@ -1,0 +1,8 @@
+{
+  "verified_years": [2026],
+  "source": "https://www.gd.xinhuanet.com/20251105/193b714799a54dcea9c20192c918f188/c.html",
+  "source_title": "受权发布：国务院办公厅关于2026年部分节假日安排的通知",
+  "pricing_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "weekend_rule": "Saturday/Sunday always offpeak, including compensatory workdays",
+  "holiday_ranges": [["2026-01-01", "2026-01-03"], ["2026-02-15", "2026-02-23"], ["2026-04-04", "2026-04-06"], ["2026-05-01", "2026-05-05"], ["2026-06-19", "2026-06-21"], ["2026-09-25", "2026-09-27"], ["2026-10-01", "2026-10-07"]]
+}

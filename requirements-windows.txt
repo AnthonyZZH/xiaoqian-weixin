@@ -1,0 +1,4 @@
+# Public versions observed in the existing Windows venv; no install performed.
+uiautomation==2.0.29
+comtypes==1.4.17
+Pillow==12.0.0

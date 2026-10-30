@@ -1,0 +1,10 @@
+# Review before installation. Deliberately disabled until controlled acceptance.
+- insert:
+    - id: xiaoqian-wechat-native
+      name: '@local/xiaoqian-harness'
+      disabled: true
+      config:
+        enabled: false
+        mode: mock
+        stateDir: ./state/xiaoqian
+        chats: []

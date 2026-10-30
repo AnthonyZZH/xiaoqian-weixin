@@ -1,0 +1,40 @@
+{
+  "name": "@local/xiaoqian-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Harness-native WeChat bridge with isolated desktop driver",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "src/",
+    "adapter/",
+    "driver/",
+    "vendor/",
+    "tools/",
+    "legacy/",
+    "cordis.patch.yml",
+    "docs/",
+    "requirements-windows.txt",
+    "compat/",
+    "SOURCE.json",
+    "NOTICE.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": "0.2.1-rc.4",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.4"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test tests/*.mjs",
+    "check": "node --check src/index.mjs"
+  }
+}

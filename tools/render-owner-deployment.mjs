@@ -1,0 +1,15 @@
+import fs from 'node:fs';import path from 'node:path';import {pathToFileURL} from 'node:url';
+const args=process.argv.slice(2),options={};for(let i=0;i<args.length;i+=2){if(!args[i]?.startsWith('--')||!args[i+1])throw Error('Use --key value pairs');options[args[i].slice(2)]=args[i+1];}
+for(const key of ['state-root','python','owner-title','native-package-root','adapter-root','output'])if(!options[key])throw Error('MISSING_'+key);
+for(const key of ['state-root','python','native-package-root','adapter-root','output'])if(!path.isAbsolute(options[key]))throw Error('ABSOLUTE_PATH_REQUIRED_'+key);
+const config={enabled:true,mode:'live',liveEnabled:true,startPaused:true,stateDir:options['state-root'],python:options.python,nativePackageRoot:options['native-package-root'],model:{provider:'deepseek-official',model:'deepseek-flash'},chats:[{id:'owner-dm',title:options['owner-title'],mode:'private',owner:true}],searchEnabled:true,ownerIntegrations:{enabled:true},ownerManagement:{enabled:options['owner-management']==='true'},rotation:{enabled:false,autoEnabled:false},initiative:{initiative_enabled:options['owner-wake']==='true',initiative_private:options['owner-wake']==='true',initiative_group:false}};
+if(options['group-title'])config.chats.push({id:'bread-group',title:options['group-title'],mode:'group',owner:false});
+if(options['main-library']==='true')config.library={url:'http://127.0.0.1:8767/mcp'};
+if(options['adapter-root']){if(!path.isAbsolute(options['adapter-root']))throw Error('ABSOLUTE_ADAPTER_REQUIRED');config.legacyDir=options['adapter-root'];}
+if(options['driver-rpc']){if(!path.isAbsolute(options['driver-rpc']))throw Error('ABSOLUTE_DRIVER_RPC_REQUIRED');config.driverRpcPath=options['driver-rpc'];}
+if(options.balance==='true')config.balance={enabled:true};
+if(options['long-tasks']==='true'){if(!path.isAbsolute(options['task-root']||''))throw Error('ABSOLUTE_TASK_ROOT_REQUIRED');config.longTasks={enabled:true,root:options['task-root']};}
+if(options['owner-files']==='true'){if(!path.isAbsolute(options['work-root']||'')||!path.isAbsolute(options['base-python']||''))throw Error('DEDICATED_WORK_ROOT_AND_PYTHON_REQUIRED');config.ownerFiles={enabled:true,python:options['base-python'],projects:{'owner-work':options['work-root']}};}
+if(options['remote-media']==='true'){if(!path.isAbsolute(options['base-python']||'')||!path.isAbsolute(options['site-packages']||''))throw Error('BASE_PYTHON_AND_SITE_PACKAGES_REQUIRED');config.remoteMediaImport={enabled:true,python:options['base-python'],sitePackages:options['site-packages']};}
+const patch=[{insert:[{id:'xiaoqian-wechat-native',name:pathToFileURL(path.resolve(import.meta.dirname,'../src/index.mjs')).href,config}]}];
+fs.writeFileSync(options.output,JSON.stringify(patch,null,2),{flag:'wx'});console.log(JSON.stringify({output:options.output,startPaused:true,ownerOnly:config.chats.length===1,configuredChats:config.chats.length,automaticRotation:false,credentialsWritten:false}));

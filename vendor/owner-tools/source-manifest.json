@@ -1,0 +1,47 @@
+{
+  "kind": "public-source-only",
+  "files": [
+    {
+      "path": "index.mjs",
+      "sha256": "6f2584f0efc8e04fdba19a8306ce31cacb7d86607ef00ae91a70de303a342cae"
+    },
+    {
+      "path": "mcp-management/index.mjs",
+      "sha256": "ff03693db8dc669d30850ded4119cc8c8b5c1773bd547be36ba750cfa21ba3b6"
+    },
+    {
+      "path": "page-reader.mjs",
+      "sha256": "fe0d2ae6d544758cdf4c512b8ff7e2d2aab8d810ea3394d00c553759883086fc"
+    },
+    {
+      "path": "plugin-management/index.mjs",
+      "sha256": "323509fc23c8b402cc260bf61e40d99559125866c540b66f28105fb5684867ec"
+    },
+    {
+      "path": "plugin-management/native-host.mjs",
+      "sha256": "6800bbed143369ffd14a3e75c8ea93839c16ad0a72e684ac220156c0be69f4fb"
+    },
+    {
+      "path": "plugin-management/tests/policy.test.mjs",
+      "sha256": "5430cae021427cdb6908d232ed36ab415eebd5906c79669403a0f0cd429a212f"
+    },
+    {
+      "path": "PROVENANCE.md",
+      "sha256": "8d1bb66393a4116a3b28540615b273bf74cda88e9fbb4b7b4d5c6eafa13ee154"
+    },
+    {
+      "path": "README.md",
+      "sha256": "3f806d49baaa271ff565b36c068b5967d2f7d2de1bbd3cdebb4123aaecb1ba5d"
+    },
+    {
+      "path": "web_reader.py",
+      "sha256": "d21c1cb68758dfa4720bef53edf191ef42929bace87c2708e530f2c5749f4cfa"
+    },
+    {
+      "path": "worker.py",
+      "sha256": "175258ac416499b9e39fb523e09e5ba2aef2f8a1b21d0929e75bb91245903fc6"
+    }
+  ],
+  "runtimeDataIncluded": false,
+  "canonicalText": "UTF-8 with LF line endings, optional BOM excluded"
+}

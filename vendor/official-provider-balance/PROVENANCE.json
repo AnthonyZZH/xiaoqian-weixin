@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-29T18:57:22.289Z",
+  "package": "@deepseek-ai/dsh-llm-deepseek-api-key",
+  "version": "0.2.1-rc.4",
+  "license": "MIT",
+  "originalSha256": "67f9cbc26ce0ea07009e0c36ee4a7cc058542cdf85b873549885922646cacd35",
+  "originalPackageModified": false,
+  "staticImportsRewritten": 5,
+  "delta": "One closure-local attachOfficialBalance call plus helper import; provider auth, configuration and model path unchanged.",
+  "integration": "Generated from pinned public installed source by src/balance-shim-builder.mjs; no credential config copied"
+}

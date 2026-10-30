@@ -1,0 +1,2 @@
+# Development boundary
+All work is isolated. Do not deploy, restart current services, run live WeChat or send messages. Use synthetic data and mocks only. Never copy credentials, chats, private memory or runtime settings. Keep original media bytes intact; screenshots are static previews. Source-only legacy snapshot is frozen. Feature agents own disjoint files. Tests must use temporary directories inside this project or OS temporary directory. No blacklists; preserve owner authentication, group tool restrictions and memory separation.
