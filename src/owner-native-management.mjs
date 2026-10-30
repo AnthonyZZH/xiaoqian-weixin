@@ -1,4 +1,4 @@
-import {searchCommunityMarket,COMMUNITY_INDEXES} from './owner-community-market.mjs';
+import {createCachedMarket,COMMUNITY_INDEXES} from '../vendor/owner-tools/plugin-management/community-market-cached.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {AsyncLocalStorage} from 'node:async_hooks';
@@ -6,9 +6,10 @@ import {createPluginManager} from '../vendor/owner-tools/plugin-management/index
 import {apply as provideNativeServices,discoverConfiguredMcp} from '../vendor/owner-tools/plugin-management/native-host.mjs';
 import {createMcpManager,createConfigStore} from '../vendor/owner-tools/mcp-management/index.mjs';
 
-export function createOwnerNativeManagement({hostCtx,isCurrentOwner,stateDir,nativePackageRoot,acceptanceChecks=false}){
+export function createOwnerNativeManagement({hostCtx,isCurrentOwner,stateDir,nativePackageRoot,python='python',marketFactory=createCachedMarket,acceptanceChecks=false}){
  const slots={pluginManager:null,pluginMarket:null,loader:null},entries=new Map(),calls=new AsyncLocalStorage();
  for(const key of Object.keys(slots))hostCtx.inject([key],inner=>{const value=inner[key];slots[key]=value;inner.effect(()=>()=>{if(slots[key]===value)slots[key]=null;});});
+ const market=marketFactory({cacheDir:path.join(stateDir,'owner-market-cache'),python,canonicalGithubApi:true});
  const proof=(name,value)=>fs.writeFileSync(path.join(stateDir,name),JSON.stringify(value));
  const confirmation=async request=>{
   const exec=calls.getStore(),e=entries.get(request.agent);
@@ -33,7 +34,7 @@ export function createOwnerNativeManagement({hostCtx,isCurrentOwner,stateDir,nat
    await auth(exec);
    let result;
    if(args.action==='indexes'){result={nativeMarketAvailable:!!slots.pluginMarket,native:slots.pluginMarket?await slots.pluginMarket.listIndexes():[],community:COMMUNITY_INDEXES,note:'Native market availability and community sources are separate. An absent native service does not mean the listed community indexes are unavailable.'};}
-   else if(args.action==='search'&&args.installedOnly!==true&&(!args.indexUrl||COMMUNITY_INDEXES.some(v=>v.url===args.indexUrl))){result=await searchCommunityMarket({query:args.query,indexUrl:args.indexUrl,signal:exec.signal});}
+   else if(args.action==='search'&&args.installedOnly!==true&&(!args.indexUrl||COMMUNITY_INDEXES.some(v=>v.url===args.indexUrl))){result=await market.search({query:args.query,indexUrl:args.indexUrl,signal:exec.signal});}
    else if(args.action==='search'&&!args.indexUrl){
     if(!slots.pluginManager)throw Error('MANAGER_UNAVAILABLE');
     const q=String(args.query||'').toLowerCase();const list=await plugin.invoke('list',{},exec);
@@ -68,5 +69,5 @@ export function createOwnerNativeManagement({hostCtx,isCurrentOwner,stateDir,nat
     proof('owner-native-management-live-proof.json',{at:new Date().toISOString(),ok:true,bundles:list.bundles.length,plugins:list.plugins.length,entryIdsPresent:list.plugins.every(p=>typeof p.entryId==='string'),installedSearchMatches:search.bundles.length,searchScope:search.scope,inspectionStatus:inspection.status,inspectionProblem:inspection.problem,profileMcpDeclarations:discovery.profile.entries.length,profileDiscoveryStatus:discovery.profile.status,ownerManaged:discovery.ownerManaged,marketAvailable:!!slots.pluginMarket,indexCount:Array.isArray(indexes)?indexes.length:0,approvalServiceAvailable:!!ctx.get('approval')?.request,approvalChannel:'native approval/request -> existing Web API waterfall',approvalPromptTested:false,wrongAgentDenied:denied,newInstalls:0,newMcpStarts:0,modelCalls:0,wechatSends:0});
    })().catch(error=>proof('owner-native-management-live-proof.json',{at:new Date().toISOString(),ok:false,code:error.code||error.message}));
   }
- },close(){for(const e of entries.values()){e.plugin.revoke();void e.mcp.revoke();}entries.clear();}};
+ },close(){market.close();for(const e of entries.values()){e.plugin.revoke();void e.mcp.revoke();}entries.clear();}};
 }

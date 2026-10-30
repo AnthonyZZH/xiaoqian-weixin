@@ -22,7 +22,7 @@ export function createOwnerIntegrations({hostCtx,getCore,config,services={}}){
  const hostShell=createOwnerShellIntegration({config,getCore,isCurrentOwner:authority});
  const page=createOwnerPageReader({isCurrentOwner:authority,python:config.python||'python',...(services.pageWorker?{worker:services.pageWorker}:{})});
  const library=config.library?.url?(services.libraryAdapter||createMainLibraryAdapter({chats:config.chats,url:config.library.url})):null;
- const management=config.ownerManagement?.enabled===true?(services.nativeManagement||createOwnerNativeManagement({hostCtx,isCurrentOwner:authority,stateDir:config.stateDir,nativePackageRoot:config.nativePackageRoot,acceptanceChecks:false})):null;
+ const management=config.ownerManagement?.enabled===true?(services.nativeManagement||createOwnerNativeManagement({hostCtx,isCurrentOwner:authority,stateDir:config.stateDir,nativePackageRoot:config.nativePackageRoot,python:config.python||'python',acceptanceChecks:false})):null;
  const mediaImport=config.remoteMediaImport?.enabled===true?createOwnerMediaImport({isCurrentOwner:authority,python:config.remoteMediaImport.python,sitePackages:config.remoteMediaImport.sitePackages,mediaRoot:path.join(config.stateDir,'media'),operationRoot:path.join(config.stateDir,'owner-media-import')}):null;
  const projectFiles=config.ownerFiles?.enabled===true?createOwnerProjectFiles({projects:config.ownerFiles.projects,python:config.ownerFiles.python,isCurrentOwner:authority,operationRoot:path.join(config.stateDir,'owner-file-operations')}):null;
  const longTasks=config.longTasks?.enabled===true?createOwnerLongTasks({hostCtx,isCurrentOwner:authority,root:config.longTasks.root,model:config.model}):null;

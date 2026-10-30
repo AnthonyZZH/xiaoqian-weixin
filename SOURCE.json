@@ -25,5 +25,8 @@
     "admissionWaitMs": 2000,
     "runtimeDataIncluded": false,
     "defaultEnabled": false
-  }
+  },
+  "deployedEquivalentCoreCommit": "91cf93a3098e579650b7f084830be920b07639f1",
+  "runtimeRelease": "cache-status-runtime-2026-10-30",
+  "deployedSourceManifest": "docs/CACHE-STATUS-SOURCE-MANIFEST.json"
 }

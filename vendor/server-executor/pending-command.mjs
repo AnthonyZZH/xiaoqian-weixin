@@ -103,7 +103,7 @@ export function createPendingOwnerPowerShell({enabled=false,approvalId,isCurrent
     }
     return Object.freeze({execute,revoke(){revoked=true;scope.abort();},register(ctx,defineTool){
       if(!enabled)return;
-      ctx.tools.register(defineTool({name:'owner_powershell',description:'Authenticated owner only: arbitrary PowerShell as the server service identity. No project-root restriction. Commands may access and modify all resources available to that identity.',parameters:{script:{type:'string',required:true,description:'PowerShell script'},cwd:{type:'string',required:true,description:'Absolute server working directory'},timeoutMs:{type:'number',description:'100鈥?20000 ms, default 30000'}},output:{schema:{type:'json'},render:(_a,r)=>[{type:'text',text:JSON.stringify(r)}]},execute}));
+      ctx.tools.register(defineTool({name:'owner_powershell',description:'Authenticated owner only: arbitrary PowerShell as the server service identity. No project-root restriction. Commands may access and modify all resources available to that identity.',parameters:{script:{type:'string',required:true,description:'PowerShell script'},cwd:{type:'string',required:true,description:'Absolute server working directory'},timeoutMs:{type:'number',description:'100–120000 ms, default 30000'}},output:{schema:{type:'json'},render:(_a,r)=>[{type:'text',text:JSON.stringify(r)}]},execute}));
     }});
   }});
 }
