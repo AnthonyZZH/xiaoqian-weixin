@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 
 from .backends import FakeBackend, RealBackend
+from .owner_edge_controller import configure as configure_owner_edge
 from .lease import DesktopLease
 from .protocol import Chat, DriverConfig, DriverError, NotSent, SendUnknown, VERSION, decode, encode, MAX_LINE
 
@@ -81,11 +82,13 @@ def serve():
                             raise DriverError("already_initialized")
                         raw = args["config"]
                         chats = tuple(Chat(**item) for item in raw.pop("allowed_chats", []))
-                        config = DriverConfig(**raw, allowed_chats=chats)
+                        owner = raw.pop("owner_edge_chat", None)
+                        config = DriverConfig(**raw, allowed_chats=chats, owner_edge_chat=Chat(**owner) if owner else None)
                         if config.mode == "real":
                             # Fixed per-user/session desktop lease shared by all state directories.
                             lease = DesktopLease()
                             backend = RealBackend(config.adapter_root)
+                            if args.get("owner_edge"):configure_owner_edge(backend,args["owner_edge"],config.allowed_chats,config.owner_edge_chat)
                         else:
                             backend = FakeBackend(config.fake_options, args["generation"], args["audit_path"])
                         result = {"protocol": VERSION, "pid": os.getpid(), "mode": config.mode}
@@ -102,6 +105,7 @@ def serve():
                                 raise NotSent("chat_not_allowed")
                             if command == "read":
                                 result = {"rows": backend.read(chat)}
+                                if getattr(backend,"last_controller_receipt",None):result["controller_receipt"]=backend.last_controller_receipt
                             elif command == "transcribe":
                                 key = args.get("source_key")
                                 if not isinstance(key, str) or not key:
@@ -133,7 +137,6 @@ def serve():
                             "error": {"code": exc.code, "send_status": "unknown"}}
             except Exception as exc:
                 code = exc.code if isinstance(exc, DriverError) else "backend_error"
-                __import__("pathlib").Path(r"C:\xiaoqian\data\harness-native-live\group-driver-error.json").write_text(__import__("json").dumps({"type":type(exc).__name__,"message":str(exc)[:400]}),encoding="utf-8")
                 response = {"v": VERSION, "id": request_id, "ok": False,
                             "error": {"code": code, "send_status": "unknown" if command in ("send", "send_file") else None}}
             try:

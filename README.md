@@ -246,3 +246,7 @@ npm test
 见 [NOTICE.md](NOTICE.md)、[docs/PROVENANCE.md](docs/PROVENANCE.md) 和 `vendor/` 下各模块自带的声明。
 
 本仓库**没有统一的根许可证**。公开可见不等于可以随意复用；各部分按各自的许可和授权处理。某个 QQ 子插件的 MIT 许可只覆盖那个子插件，本仓库也不包含 QQ 实现。
+
+## 主人私聊页面锚点恢复
+
+兼容驱动已归档经过 Windows 服务器验证的最新页恢复机制，避免整页无顺序重叠后永久停止接收。保留原 ACK、会话及发送 unknown 状态；停滞期间历史消息未补投。接入配置、恢复步骤、公开副本差异及 12 项 mock 验证见 [恢复说明](docs/owner-anchor-recovery.md)。

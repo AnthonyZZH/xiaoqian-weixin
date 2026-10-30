@@ -12,6 +12,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "vendor"))
+# Auxiliary media/wake packages may be shared by a source-only core checkout.
+sys.path.insert(1, str(Path(__file__).resolve().parents[2] / "vendor"))
 from xiaoqian_driver import Chat, DriverClient, DriverConfig  # noqa: E402
 from xiaoqian_media import MediaLibrary  # noqa: E402
 from owner_wake_policy import ScheduleConfig, Scheduler  # noqa: E402
@@ -49,11 +51,16 @@ def serve():
                         raise ValueError("duplicate_chat")
                     if config["mode"] == "real" and not config.get("allow_real"):
                         raise ValueError("real_mode_not_authorized")
+                    owner_chats = [chats[row["id"]] for row in config["chats"]
+                                   if row.get("owner") is True and row["mode"] == "private"]
+                    if len(owner_chats) > 1:
+                        raise ValueError("ambiguous_owner_edge_chat")
                     options = DriverConfig(
                         mode=config["mode"], allow_real=config.get("allow_real") is True,
                         adapter_root=config.get("adapter_root"),
                         media_root=config.get("media_root"),
                         allowed_chats=tuple(chats.values()),
+                        owner_edge_chat=owner_chats[0] if owner_chats else None,
                         command_timeout=config.get("command_timeout", 5.0),
                         max_chars=config.get("max_chars", 1000),
                         fake_options=config.get("fake_options", {}),

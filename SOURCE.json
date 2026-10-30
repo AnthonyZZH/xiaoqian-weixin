@@ -7,5 +7,15 @@
   "integratedFixes": [
     "lossless-native-plugin-list",
     "independent-registry-scope-notes"
-  ]
+  ],
+  "ownerAnchorRecovery": {
+    "version": "certified-live-edge-v1",
+    "scope": "compat/vendor/xiaoqian_driver",
+    "runtimeDataIncluded": false,
+    "historyReplay": false,
+    "exportDifferences": [
+      "explicit trusted owner configuration replaces deployment-only name pin",
+      "incident diagnostics and draft-clearing hook excluded"
+    ]
+  }
 }

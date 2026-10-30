@@ -96,6 +96,7 @@ class DriverConfig:
     adapter_root: str | None = None
     media_root: str | None = None
     allowed_chats: tuple[Chat, ...] = ()
+    owner_edge_chat: Chat | None = None
     command_timeout: float = 5.0
     startup_timeout: float = 5.0
     queue_size: int = 128
@@ -103,6 +104,8 @@ class DriverConfig:
     fake_options: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
+        if self.owner_edge_chat is not None and (not isinstance(self.owner_edge_chat, Chat) or self.owner_edge_chat.mode != "private" or self.owner_edge_chat not in self.allowed_chats):
+            raise ValueError("invalid_owner_edge_chat")
         if self.mode not in ("fake", "real"):
             raise ValueError("invalid_driver_mode")
         for number in (self.command_timeout, self.startup_timeout):

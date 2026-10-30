@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from .owner_edge_controller import client_options, verify as verify_owner_edge
 from .lease import FileLease
 from .protocol import Chat, DriverConfig, DriverError, ReadResult, SendResult, VERSION, MAX_LINE, decode, digest, encode
 from .state import StateStore
@@ -94,7 +95,13 @@ class DriverClient:
                                 rows = result.get("rows")
                                 if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                                     raise DriverError("invalid_read_response")
-                                result = self._state.ingest(Chat(**job.args["chat"]), rows)
+                                chat=Chat(**job.args["chat"])
+                                if self.config.mode=='real' and chat==getattr(self,'_owner_edge_chat',None):
+                                    receipt=result.get('controller_receipt')
+                                    if verify_owner_edge(self,receipt,chat,rows) is None:raise DriverError('owner_edge_receipt_unverified')
+                                    result=self._state.ingest(chat,rows,recovery_receipt=receipt,verify_recovery=lambda value:verify_owner_edge(self,value,chat,rows))
+                                else:
+                                    result=self._state.ingest(chat,rows)
                             elif job.command == "health":
                                 result = {**result, "generation": self._generation, "pid": self._process.pid}
                     job.future.set_result(result)
@@ -162,7 +169,8 @@ class DriverClient:
                 self._generation += 1
                 threading.Thread(target=self._reader, args=(process, self._events), daemon=True).start()
             hello_deadline = min(deadline, time.monotonic() + self.config.startup_timeout)
-            result = self._request("hello", {"config": asdict(self.config), "generation": self._generation,
+            owner_edge=client_options(self)
+            result = self._request("hello", {"config": asdict(self.config), "generation": self._generation, "owner_edge":owner_edge,
                                             "audit_path": str(self.state_dir / "fake-events.jsonl")}, hello_deadline)
             if result.get("protocol") != VERSION or result.get("mode") != self.config.mode:
                 raise DriverError("handshake_mismatch")

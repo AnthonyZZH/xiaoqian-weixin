@@ -27,6 +27,7 @@ class StateStore:
                 payload TEXT NOT NULL, acked INTEGER NOT NULL DEFAULT 0);
         """)
         snapshot_identity.initialize(self.db)
+        snapshot_identity.recovery_initialize(self.db)
         # Client owns an exclusive lease. A previous pending send can no longer finish.
         with self.lock, self.db:
             for (operation_id,) in self.db.execute("SELECT operation_id FROM sends WHERE status='pending'").fetchall():
@@ -77,12 +78,15 @@ class StateStore:
                 return SendResult(operation_id, "unknown", "send_in_progress", cached=True)
             return self._send(row[1], cached=True)
 
-    def ingest(self, chat: Chat, rows: list[dict]) -> ReadResult:
+    def ingest(self, chat: Chat, rows: list[dict], *, recovery_receipt=None, verify_recovery=None) -> ReadResult:
         # Validate the whole snapshot first; malformed batches do not partly enter the inbox.
         validated = [Message.from_row(chat, row) for row in rows]
         duplicates = 0
         with self.lock, self.db:
-            messages, self.last_identity_defer = snapshot_identity.messages(self.db,chat,rows,Message,digest)
+            if recovery_receipt is not None:
+                messages, self.last_identity_defer = snapshot_identity.recovery_messages(self.db,chat,rows,Message,digest,recovery_receipt,verify_recovery)
+            else:
+                messages, self.last_identity_defer = snapshot_identity.messages(self.db,chat,rows,Message,digest)
             for message in messages:
                 old = self.db.execute("SELECT payload FROM inbox WHERE message_id=?", (message.message_id,)).fetchone()
                 payload = self._dump(asdict(message))

@@ -137,6 +137,10 @@ class RealBackend:
         return {"ready": True, "backend_loaded": self.adapter is not None, "mode": "real"}
 
     def read(self, chat: Chat):
+        self.last_controller_receipt=None
+        if chat==getattr(self,'_edge_owner',None):
+            from .owner_edge_controller import read_latest
+            return read_latest(self,chat)
         adapter = self._select(chat)
         rows = adapter.read()
         self.rows = {row.key: row for row in rows}
@@ -199,34 +203,3 @@ class RealBackend:
             raise DriverError("image_capture_too_large")
         return {"base64": base64.b64encode(buffer.getvalue()).decode("ascii"),
                 "source_kind": "static_capture"}
-
-# Incident diagnostics: hashes/keys only, no message bodies or sender names.
-_identity_original_read=RealBackend.read
-def _identity_diagnostic_read(self,chat):
-    rows=_identity_original_read(self,chat)
-    import json,hashlib
-    from pathlib import Path
-    def h(v):return hashlib.sha256(v.encode()).hexdigest()
-    data={'chat':chat.key,'rows':[{'key':r['key'],'role':r['role'],'length':len(r['text']),'senderHash':h(r.get('sender','')),'bodyHash':h(r['text']),'token':h(json.dumps([r.get('sender',''),r['role'],r['text'],r.get('timestamp','')],ensure_ascii=False,separators=(',',':')))} for r in rows]}
-    Path(r'C:\xiaoqian\workspaces\harness-native-20261029\acceptance\identity-current-owner.json').write_text(json.dumps(data),encoding='utf-8')
-    try:
-        edit=self.adapter.validate()
-        draft=self.adapter.input_value(edit)
-        request_path=Path('C:/xiaoqian/workspaces/harness-native-20261029/acceptance/group-draft-recovery-request.json')
-        if request_path.exists():
-            req=json.loads(request_path.read_text(encoding='utf-8'))
-            if req.get('status')=='pending' and req.get('chat')==chat.key and len(draft)==req['expectedLength'] and h(draft)==req['expectedHash']:
-                token=tuple(edit.GetRuntimeId());current=self.adapter.validate()
-                if tuple(current.GetRuntimeId())==token and h(self.adapter.input_value(current))==req['expectedHash']:
-                    backup=Path('C:/xiaoqian/data/harness-native-live/recovery-drafts');backup.mkdir(exist_ok=True)
-                    (backup/(req['operationId']+'.json')).write_text(json.dumps({'chat':chat.key,'draft':draft}),encoding='utf-8')
-                    req['status']='attempted';request_path.write_text(json.dumps(req),encoding='utf-8')
-                    current.GetValuePattern().SetValue('',waitTime=0)
-                    req['status']='cleared' if self.adapter.input_value(current)=='' else 'cleanup_unconfirmed'
-                    request_path.write_text(json.dumps(req),encoding='utf-8')
-                    draft=self.adapter.input_value(current)
-        Path('C:/xiaoqian/workspaces/harness-native-20261029/acceptance/text-draft-observation.json').write_text(json.dumps({'chat':chat.key,'length':len(draft),'bodyHash':h(draft)}),encoding='utf-8')
-    except Exception:
-        pass
-    return rows
-RealBackend.read=_identity_diagnostic_read
