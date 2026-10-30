@@ -4,16 +4,20 @@ from .protocol import Chat,DriverError
 def encoded(value):return json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
 def client_options(client):
     owner=client.config.owner_edge_chat
+    chats=tuple(c for c in client.config.allowed_chats if c==owner or c.mode=='group')
+    client._edge_chats=chats
     client._owner_edge_chat=owner
     client._owner_edge_secret=secrets.token_bytes(32)
-    if client.config.mode!='real' or owner is None:return None
-    return {'chat':owner.to_dict(),'key':client._owner_edge_secret.hex()}
+    if client.config.mode!='real' or not chats:return None
+    return {'chats':[c.to_dict() for c in chats],'key':client._owner_edge_secret.hex()}
 def configure(backend,options,allowed,expected_owner):
-    chat=Chat(**options['chat']);key=bytes.fromhex(options['key'])
-    if chat not in allowed or chat.mode!='private' or chat!=expected_owner or len(key)!=32:raise DriverError('owner_edge_config_invalid')
-    backend._edge_owner=chat;backend._edge_secret=key;backend._edge_epoch=uuid.uuid4().hex;backend._edge_sequence=0
+    chats=tuple(Chat(**value) for value in options.get('chats',[options.get('chat')]) if value is not None)
+    key=bytes.fromhex(options['key'])
+    if not chats or any(c not in allowed or not (c==expected_owner or c.mode=='group') for c in chats) or len(key)!=32:raise DriverError('owner_edge_config_invalid')
+    backend._edge_chats=chats;backend._edge_owner=expected_owner
+    backend._edge_secret=key;backend._edge_epoch=uuid.uuid4().hex;backend._edge_sequence=0
 def verify(client,receipt,chat,rows):
-    if not isinstance(receipt,dict) or chat!=getattr(client,'_owner_edge_chat',None):return None
+    if not isinstance(receipt,dict) or chat not in getattr(client,'_edge_chats',()):return None
     proof=dict(receipt);signature=proof.pop('signature','')
     expected=hmac.new(client._owner_edge_secret,encoded(proof),hashlib.sha256).hexdigest()
     if not isinstance(signature,str) or not hmac.compare_digest(signature,expected):return None
@@ -46,7 +50,7 @@ def read_latest(backend,chat):
              'image_available':row.image is not None,'voice_available':row.voice is not None,'odd':row.odd} for row in rows]
     backend._edge_sequence+=1
     proof={'chat_key':chat.key,'page_digest':hashlib.sha256(encoded(result)).hexdigest(),'at_live_edge':True,
-           'controller_epoch':backend._edge_epoch,'viewport_generation':'owner-latest-native-navigation',
+           'controller_epoch':backend._edge_epoch,'viewport_generation':chat.key+':latest-native-navigation',
            'sequence':backend._edge_sequence,'native_action':'focused_message_list_ctrl_end'}
     proof['signature']=hmac.new(backend._edge_secret,encoded(proof),hashlib.sha256).hexdigest()
     backend.last_controller_receipt=proof

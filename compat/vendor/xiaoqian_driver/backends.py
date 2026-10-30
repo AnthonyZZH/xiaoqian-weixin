@@ -138,7 +138,7 @@ class RealBackend:
 
     def read(self, chat: Chat):
         self.last_controller_receipt=None
-        if chat==getattr(self,'_edge_owner',None):
+        if chat in getattr(self,'_edge_chats',()):
             from .owner_edge_controller import read_latest
             return read_latest(self,chat)
         adapter = self._select(chat)

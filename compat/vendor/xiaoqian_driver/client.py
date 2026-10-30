@@ -96,7 +96,7 @@ class DriverClient:
                                 if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                                     raise DriverError("invalid_read_response")
                                 chat=Chat(**job.args["chat"])
-                                if self.config.mode=='real' and chat==getattr(self,'_owner_edge_chat',None):
+                                if self.config.mode=='real' and chat in getattr(self,'_edge_chats',()):
                                     receipt=result.get('controller_receipt')
                                     if verify_owner_edge(self,receipt,chat,rows) is None:raise DriverError('owner_edge_receipt_unverified')
                                     result=self._state.ingest(chat,rows,recovery_receipt=receipt,verify_recovery=lambda value:verify_owner_edge(self,value,chat,rows))
