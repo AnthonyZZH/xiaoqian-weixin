@@ -1,0 +1,22 @@
+{
+  "publicBase": "6e8c72b7cbfff4d08a162de678ebec04654443a9",
+  "component": "read-outcomes/v1",
+  "publicFileSha256": {
+    "compat/vendor/xiaoqian_driver/read_audit.py": "14216c8b4b3f91da79e4151044bb19c5b5dd591d2014a2291de9bdc6ef070413",
+    "compat/vendor/xiaoqian_driver/client.py": "d9f7a4c1c90c9bb9857464b061ae3d3d75517d827308d2444588fa424bf7fc2d",
+    "compat/driver/bridge_rpc.py": "5f48f935af3bc5cc2389e716a8d279eebf61707297840d01917af7e72fdf6140",
+    "driver/read-outcomes.mjs": "4a6b73daeeaf5f38668411762ecb308e9aa5c438063239001625e460c22e6deb",
+    "driver/durable-client.mjs": "7b7bd3427796aad0d69fd13141e45b5a972ada180d43b147ec7701015d55ddeb"
+  },
+  "runtimeExactMatchExcept": [
+    "compat/driver/bridge_rpc.py"
+  ],
+  "compatibilityNote": "RPC retains public owner_chat configuration and shared-vendor fallback. Deployed RPC SHA256: cf635aab8f7e98b5cfdcbf5353aa5d2b5db11bf708f2669f6398760597dcbda4. Read outcome behavior is identical.",
+  "runtimeDataIncluded": false,
+  "optionalMeasurementPortIncluded": false,
+  "slowReadRootCauseFixed": false,
+  "regressionCases": {
+    "python": 7,
+    "node": 9
+  }
+}

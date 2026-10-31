@@ -1,0 +1,23 @@
+{
+  "fixedInstalledSourceSha256": {
+    "backends.py": "3b6fd5006bff274197877a86d51b6df9b41752e3e4a7423b2cfb96309dbca362",
+    "worker.py": "d1a7b6bfe3f29d08226952eec0a05b55f02179896a5a17aa5938ec46aa268e86",
+    "owner_edge_controller.py": "a630622c2dbf174d59e8a07dddd167e462c91095a76bd02e5a67c03b33c4ce9b",
+    "read_phases.py": "264d50e1c4037586c4cd25459b594c434061d755fc521679713da73def3c742e",
+    "wechat_adapter.title-fixed.py": "5a6cb34ce88e8b889c6ae8a314cb7d5ff155525496651c6bb76875e76cf014aa"
+  },
+  "publicFileSha256": {
+    "compat/vendor/xiaoqian_driver/backends.py": "3b6fd5006bff274197877a86d51b6df9b41752e3e4a7423b2cfb96309dbca362",
+    "compat/vendor/xiaoqian_driver/worker.py": "fd1f6e69deb82efbaff19523ee79f1e60aba23914b964e04005ae6a03685c42b",
+    "compat/vendor/xiaoqian_driver/owner_edge_controller.py": "cbc5f59943a66678a918d56365fc60ad73b624c8511a317f2a6a948cbddf14ee",
+    "compat/vendor/xiaoqian_driver/read_phases.py": "264d50e1c4037586c4cd25459b594c434061d755fc521679713da73def3c742e",
+    "adapter/wechat_adapter.py": "3220e4f6dc8b2311e3e1c6bf0ab6fc6a899b7da05e45d6711b6df207c5d24284"
+  },
+  "extractionScope": "Metadata stages only; title methods only; public owner configuration and send/attachment safeguards retained. No raw-error runtime hook.",
+  "regressionCases": {
+    "phase": 3,
+    "title": 5
+  },
+  "runtimeDataIncluded": false,
+  "slowReadRootCauseFixed": false
+}

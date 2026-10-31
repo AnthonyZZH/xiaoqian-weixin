@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 
 from .backends import FakeBackend, RealBackend
+from .read_phases import ReadPhases
 from .draft_journal import DraftJournal
 from .owner_edge_controller import configure as configure_owner_edge
 from .lease import DesktopLease
@@ -93,6 +94,7 @@ def serve():
                             if args.get("owner_edge"):configure_owner_edge(backend,args["owner_edge"],config.allowed_chats,config.owner_edge_chat)
                         else:
                             backend = FakeBackend(config.fake_options, args["generation"], args["audit_path"])
+                        backend._read_phases=ReadPhases(Path(args["audit_path"]).parent,args["generation"])
                         result = {"protocol": VERSION, "pid": os.getpid(), "mode": config.mode}
                     else:
                         if backend is None:
@@ -106,7 +108,8 @@ def serve():
                             if config.mode == "real" and chat not in config.allowed_chats:
                                 raise NotSent("chat_not_allowed")
                             if command == "read":
-                                result = {"rows": backend.read(chat)}
+                                with backend._read_phases.request(request_id):
+                                    result = {"rows": backend.read(chat)}
                                 if getattr(backend,"last_controller_receipt",None):result["controller_receipt"]=backend.last_controller_receipt
                             elif command == "transcribe":
                                 key = args.get("source_key")

@@ -195,14 +195,22 @@ class WeChatAdapter:
                 if top and top != hwnd and window_pid(top) != own and class_name(top) not in SHELL_CLASSES:
                     _user32.ShowWindow(top, 6)  # SW_MINIMIZE
 
-    def current(self):
-        """(title, is_private) of the chat open in WeChat, or (None, None)."""
+    def current_title(self):
+        """Read the live title; does not certify private/group mode."""
         self.check_window()
         title = self.window.TextControl(RegexAutomationId=r".*big_title_line_h_view$")
         if not title.Exists(0.3):
+            return None
+        return chat_title(title.Name)
+
+
+    def current(self):
+        """(title, is_private); mode is freshly checked on every validation."""
+        title = self.current_title()
+        if title is None:
             return None, None
         single = self.window.GroupControl(ClassName="mmui::ChatTitleBarChatSingleView").Exists(0)
-        return chat_title(title.Name), single
+        return title, single
 
     def validate(self):
         title, single = self.current()
@@ -296,7 +304,7 @@ class WeChatAdapter:
     def open_chat(self, name):
         """Click `name` in the conversation list and confirm the title changed."""
         self.check_window()
-        if self.current()[0] == name:
+        if self.current_title() == name:
             return
         item = self.window.ListItemControl(AutomationId="session_item_" + name, searchDepth=30)
         previous = foreground()
@@ -310,11 +318,11 @@ class WeChatAdapter:
             else:
                 self.search_chat(name)
             deadline = time.monotonic() + 3
-            while time.monotonic() < deadline and self.current()[0] != name:
+            while time.monotonic() < deadline and self.current_title() != name:
                 time.sleep(0.2)
         finally:
             self.restore(previous)
-        if self.current()[0] != name:
+        if self.current_title() != name:
             raise RuntimeError(f"点击后没有切到「{name}」，请手动打开")
 
     def restore(self, previous):

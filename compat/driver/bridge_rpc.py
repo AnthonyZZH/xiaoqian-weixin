@@ -33,6 +33,7 @@ def serve():
     try:
         for line in sys.stdin:
             request_id = None
+            op = None
             try:
                 request = json.loads(line)
                 request_id = request["id"]
@@ -108,7 +109,7 @@ def serve():
                     raise ValueError("target_denied")
                 chat = chats[target_id]
                 if op == "read":
-                    result = client.read(chat)
+                    result = client.read(chat, request_id=request_id)
                     rows = []
                     for item in result.messages:
                         if item.chat_key != chat.key:
@@ -118,7 +119,7 @@ def serve():
                                      "sourceKey": item.source_key,
                                      "imageAvailable": item.image_available,
                                      "voiceAvailable": item.voice_available})
-                    reply(request_id, "ok", code="READ", messages=rows, identityDeferred=getattr(client._state, "last_identity_defer", None), identityDuplicateCount=result.duplicate_count)
+                    reply(request_id, "ok", code="READ", messages=rows, readOutcome=client.last_read_outcome, identityDeferred=getattr(client._state, "last_identity_defer", None), identityDuplicateCount=result.duplicate_count)
                 elif op == "ack":
                     ids = args.get("messageIds")
                     if not isinstance(ids, list) or len(ids) > 200 or any(
@@ -226,7 +227,7 @@ def serve():
                     raise ValueError("operation_denied")
             except Exception as exc:
                 code = getattr(exc, "code", None) or str(exc)
-                reply(request_id, "rejected", code=str(code)[:120])
+                reply(request_id, "rejected", code=str(code)[:120], **({"readOutcome":client.last_read_outcome} if op=="read" and client is not None else {}))
     finally:
         if client is not None:
             client.close()

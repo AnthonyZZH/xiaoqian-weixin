@@ -1,6 +1,7 @@
 """Owner-only latest-page receipt; standard library imports remain cross-platform."""
 import hashlib,hmac,json,secrets,uuid
 from .protocol import Chat,DriverError
+from .read_phases import phase
 def encoded(value):return json.dumps(value,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
 def client_options(client):
     owner=client.config.owner_edge_chat
@@ -30,9 +31,11 @@ def read_latest(backend,chat,*,selected=None):
     if selected is not None and (selected is not backend.adapter or backend.chat!=chat):
         raise DriverError('owner_edge_selection_mismatch')
     module=backend.module
-    edit=adapter.validate();draft=adapter.input_value(edit)
-    listing=adapter.window.ListControl(AutomationId='chat_message_list')
-    if not listing.Exists(.3):raise DriverError('owner_edge_list_missing')
+    with phase(backend,"edge_initial_validate"):
+        edit=adapter.validate();draft=adapter.input_value(edit)
+    with phase(backend,'edge_list_lookup'):
+        listing=adapter.window.ListControl(AutomationId='chat_message_list')
+        if not listing.Exists(.3):raise DriverError('owner_edge_list_missing')
     adapter.window.SetActive(waitTime=.05);listing.SetFocus()
     focused=auto.GetFocusedControl();inside=False
     for _ in range(8):
@@ -41,11 +44,15 @@ def read_latest(backend,chat,*,selected=None):
         focused=focused.GetParentControl()
         if focused is None:break
     if not inside or module.foreground()!=adapter.hwnd:raise DriverError('owner_edge_focus_unverified')
-    adapter.validate();auto.SendKeys('{Ctrl}{End}',waitTime=.1)
-    adapter.validate();rows=adapter.read()
-    if adapter.input_value(edit)!=draft:raise DriverError('owner_edge_draft_changed')
-    # Same owner chat and worker own the view throughout the native action/read.
-    adapter.validate()
+    with phase(backend,'edge_navigation_validate'):
+        adapter.validate();auto.SendKeys('{Ctrl}{End}',waitTime=.1)
+        adapter.validate()
+    with phase(backend,'adapter_read'):
+        rows=adapter.read()
+    with phase(backend,'edge_final_validate'):
+        if adapter.input_value(edit)!=draft:raise DriverError('owner_edge_draft_changed')
+        # Same validated chat and worker own the view throughout the native action/read.
+        adapter.validate()
     if module.foreground()!=adapter.hwnd:raise DriverError('owner_edge_foreground_changed')
     backend.rows={row.key:row for row in rows}
     result=[{'key':row.key,'text':row.text,'role':row.role,'sender':row.sender,

@@ -1,6 +1,6 @@
 {
   "sourceCommit": "31d600923536d01df6702a344ae8b9abf2dc2235",
-  "compatibilityDriverSha256": "de3bba346075a9c8704ae9ecee7b963d8490bac5def489ff3a581f8326339e06",
+  "compatibilityDriverSha256": "5f48f935af3bc5cc2389e716a8d279eebf61707297840d01917af7e72fdf6140",
   "productionDriverMigration": "pinned-generation; fulltext-v2 not enabled",
   "runtimeDataIncluded": false,
   "hotfixCoreCommit": "02791fa0059e452f95a117187fb1bc15c071c434",
@@ -14,7 +14,9 @@
     "persistent-owned-draft-journal",
     "obsolete-read-diagnostics-removed",
     "owner-approval-and-management-jobs",
-    "empty-legacy-task-submission-hidden"
+    "empty-legacy-task-submission-hidden",
+    "read-terminal-outcome-evidence",
+    "read-stage-metadata-and-title-selection"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -38,5 +40,21 @@
   "previousPublicCommit": "2cb8370ee9581498fbc2c3c21e724de4017c39c2",
   "candidateIsWholeReleaseDeployment": false,
   "privateDataIncluded": false,
-  "acceptanceNotes": "docs/V6B-CLOSEOUT.md"
+  "acceptanceNotes": "docs/V6B-CLOSEOUT.md",
+  "readOutcomes": {
+    "revision": "read-outcomes/v1",
+    "sourceManifest": "docs/READ-OUTCOMES-SOURCE.json",
+    "runtimeDataIncluded": false,
+    "budgetsChanged": false,
+    "uiActionsAdded": false,
+    "slowReadRootCauseFixed": false,
+    "componentDeployed": true,
+    "wholeSnapshotDeploymentClaimed": false
+  },
+  "readPhases": {
+    "sourceManifest": "docs/READ-PHASES-SOURCE.json",
+    "runtimeDataIncluded": false,
+    "optionalMeasurementPortIncluded": false,
+    "slowReadRootCauseFixed": false
+  }
 }

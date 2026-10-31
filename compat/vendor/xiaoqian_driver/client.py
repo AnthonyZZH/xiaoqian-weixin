@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .owner_edge_controller import client_options, verify as verify_owner_edge
+from .read_audit import ReadAudit
 from .lease import FileLease
 from .protocol import Chat, DriverConfig, DriverError, ReadResult, SendResult, VERSION, MAX_LINE, decode, digest, encode
 from .state import StateStore
@@ -26,6 +27,14 @@ class _Job:
     args: dict[str, Any]
     deadline: float
     future: Future
+    request_id: str = ""
+    queued_at: float = 0
+    stage: str = "queue"
+    failure_stage: str | None = None
+    queue_ms: int | None = None
+    worker_pid: int | None = None
+    generation: int = 0
+    worker_exit_code: int | None = None
 
 
 class DriverClient:
@@ -51,26 +60,33 @@ class DriverClient:
         self._generation = 0
         self._quarantined = False
         self._worker_ready = False
+        self._read_audit = ReadAudit(self.state_dir)
+        self.last_read_outcome = None
+        self._active_job = None
         self._dispatcher = threading.Thread(target=self._run, name="xiaoqian-ui-queue", daemon=True)
         self._dispatcher.start()
 
-    def _submit(self, command: str, args: dict, timeout: float | None):
-        import math
+    def _submit(self, command: str, args: dict, timeout: float | None, *, request_id=None):
+        import math,re
         budget = self.config.command_timeout if timeout is None else timeout
-        if isinstance(budget, bool) or not math.isfinite(budget) or budget <= 0:
-            raise ValueError("invalid_timeout")
-        future = Future()
-        job = _Job(command, args, time.monotonic() + budget, future)
-        with self._submission_lock:
-            if self._closing.is_set():
-                raise DriverError("client_closed")
-            try:
-                self._queue.put_nowait(job)
-            except queue.Full:
-                if command in ("send", "send_file"):
-                    return SendResult(args["operation_id"], "failed", "queue_full")
-                raise DriverError("queue_full") from None
-        return future.result()
+        if isinstance(budget,bool) or not math.isfinite(budget) or budget<=0:raise ValueError("invalid_timeout")
+        future=Future();now=time.monotonic()
+        rid=request_id if isinstance(request_id,str) and re.fullmatch(r"[a-fA-F0-9-]{32,36}",request_id) else uuid.uuid4().hex
+        job=_Job(command,args,now+budget,future,request_id=rid,queued_at=now)
+        result=None;error=None
+        if command=="read":self._read_audit.start(job)
+        try:
+            with self._submission_lock:
+                if self._closing.is_set():raise DriverError("client_closed")
+                try:self._queue.put_nowait(job)
+                except queue.Full:
+                    if command in ("send","send_file"):return SendResult(args["operation_id"],"failed","queue_full")
+                    raise DriverError("queue_full") from None
+            result=future.result();return result
+        except BaseException as exc:
+            error=exc;raise
+        finally:
+            if command=="read":self.last_read_outcome=self._read_audit.finish(job,result,error,self._generation)
 
     def _run(self):
         try:
@@ -79,7 +95,9 @@ class DriverClient:
                     job = self._queue.get(timeout=0.05)
                 except queue.Empty:
                     continue
+                self._active_job=job;job.queue_ms=round((time.monotonic()-job.queued_at)*1000)
                 try:
+                    job.stage="dispatch"
                     if job.command in ("send", "send_file"):
                         result = self._send(job)
                     else:
@@ -89,25 +107,37 @@ class DriverClient:
                             self._ensure_worker(job.deadline)
                             result = {"generation": self._generation, "pid": self._process.pid}
                         else:
+                            job.stage="worker_start"
                             self._ensure_worker(job.deadline)
                             result = self._request(job.command, job.args, job.deadline)
                             if job.command == "read":
                                 rows = result.get("rows")
                                 if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                                     raise DriverError("invalid_read_response")
+                                job.stage="identity_verify"
                                 chat=Chat(**job.args["chat"])
                                 if self.config.mode=='real' and chat in getattr(self,'_edge_chats',()):
                                     receipt=result.get('controller_receipt')
                                     if verify_owner_edge(self,receipt,chat,rows) is None:raise DriverError('owner_edge_receipt_unverified')
+                                    job.stage="inbox_commit"
                                     result=self._state.ingest(chat,rows,recovery_receipt=receipt,verify_recovery=lambda value:verify_owner_edge(self,value,chat,rows))
                                 else:
+                                    job.stage="inbox_commit"
                                     result=self._state.ingest(chat,rows)
                             elif job.command == "health":
                                 result = {**result, "generation": self._generation, "pid": self._process.pid}
-                    job.future.set_result(result)
-                except Exception as exc:
-                    job.future.set_exception(exc)
+                    job.stage="done"
+                    if not job.future.done():job.future.set_result(result)
+                except BaseException as exc:
+                    job.failure_stage=job.failure_stage or job.stage
+                    if job.command=="read" and self._closing.is_set():exc=DriverError("client_closed")
+                    elif not isinstance(exc,Exception):
+                        if job.command!="read":raise
+                        exc=DriverError("dispatcher_failed")
+                    if not job.future.done():job.future.set_exception(exc)
                 finally:
+                    if job.command=="read" and not job.future.done():job.future.set_exception(DriverError("request_abandoned"))
+                    self._active_job=None
                     self._queue.task_done()
         finally:
             while True:
@@ -190,6 +220,11 @@ class DriverClient:
         request_id = uuid.uuid4().hex
         line = encode({"v": VERSION, "id": request_id, "command": command, "args": args})
         process, events = self._process, self._events
+        job=self._active_job
+        if job and job.command=="read":
+            job.stage="worker_handshake" if command=="hello" else "backend_read_wait"
+            job.worker_pid=process.pid if process is not None else None
+            job.generation=self._generation
         if process is None:
             raise DriverError("worker_unavailable")
 
@@ -223,6 +258,7 @@ class DriverClient:
             exc.send_status = error.get("send_status")
             raise exc
         except DriverError as exc:
+            if job and job.command=="read":job.failure_stage=job.stage
             # Valid backend errors do not require destroying the UI process. IPC/timeouts do.
             if command == "hello" or not hasattr(exc, "send_status"):
                 self._stop_worker()
@@ -244,6 +280,7 @@ class DriverClient:
                 except subprocess.TimeoutExpired:
                     self._quarantined = True
                     raise DriverError("worker_stop_unconfirmed") from None
+            if self._active_job and self._active_job.command=="read":self._active_job.worker_exit_code=process.returncode
             # Exit is confirmed before another worker may start. Only our own process is killed.
             for stream in (process.stdin, process.stdout):
                 if stream is not None:
@@ -298,12 +335,12 @@ class DriverClient:
         """Restart only the owned worker, never WeChat or any server service."""
         return self._submit("restart", {}, timeout)
 
-    def read(self, chat: Chat, *, timeout: float | None = None) -> ReadResult:
+    def read(self, chat: Chat, *, timeout: float | None = None, request_id=None) -> ReadResult:
         # Startup plus up to 5s first-frame media loading and bounded UI control work.
         # Explicit caller deadlines and all send budgets remain unchanged.
         if timeout is None:
             timeout=max(self.config.command_timeout,min(12.0,self.config.startup_timeout+7.0))
-        return self._submit("read", {"chat": chat.to_dict()}, timeout)
+        return self._submit("read", {"chat": chat.to_dict()}, timeout, request_id=request_id)
 
     def pending(self, chat: Chat):
         return self._state.pending(chat)

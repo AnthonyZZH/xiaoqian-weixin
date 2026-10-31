@@ -209,6 +209,19 @@ Harness home 与 provider 配置 · 桥接 `stateDir`（含 `bridge/bridge.json`
 
 回到上一个可用的 Harness-native 版本，不回到旧外壳。新版本如果已经收发过消息，**不能直接用旧备份整库覆盖**，否则会丢 ACK 或重复发送；先对账，unknown 原样保留。不要强删 Session 写锁，先查清是谁持有。
 
+
+## Read 终态诊断修复（已部署组件，慢读根因未解决）
+
+兼容驱动现在为每次 read 保留可关联的 Node/Python 元数据终态：成功、超时、异常、进程退出及关闭取消都有明确结果。它补齐了“请求已消耗，却没有结束证据”的诊断缺口；**不是 UI 提速补丁，也不是发送确认或历史消息重放机制**。
+
+- Python worker/client 和 Node JSONL transport 使用关联 request ID，记录阶段、耗时、worker 代际及可取得的退出码；不记录正文、群成员名、人格、命令参数或原始异常文本。
+- 超时后的下一代 worker 可以继续接收新 read；关闭时在途和排队 read 的 future 会结束。诊断文件写入失败会计数，不得让业务 future 挂住。
+- 既有群 `driver.call` 包装仍保留；无法追溯其队列起点时，`queue_ms` 明确为 null，不伪造为 0。
+- 收件落盘/ACK、发送 operation/unknown、主人和群权限、read/send budget、UI动作均不改变。日志中 read success 只表示读取完成，不等于 Agent 已回复或微信收件端已看到。
+- 服务器已观察到 6 次自然 read 的 Node/Python 成对终态；成功仍约 **10.2–11.6秒**，另有 `backend_read_wait` 到约12秒超时、worker退出后下一代成功。**慢读、冷加载或控件遍历的具体耗时根因尚未解决**。
+
+日志在私有 driver state 目录下生成，绝不要提交到仓库。状态字段、保留策略、16项离线回归和精确命令见 [Read终态诊断说明](docs/READ-OUTCOMES.md)。公开仓库只收源码、通用合成夹具和脱敏状态说明，不含生产proof、样本、聊天或运行配置。整套公开快照仍须逐项部署验收。
+
 ## 常见问题
 
 | 现象 | 先查这里 |
@@ -260,3 +273,9 @@ Maintenance: [SDK task input context compatibility](docs/TASK-INPUT-SDK-COMPAT.m
 ## v6b source candidate
 
 See [source closeout and remaining acceptance](docs/V6B-CLOSEOUT.md) for group policy lifecycle, persistent draft protection, compatibility-driver continuity, approval/status updates and Windows deployment limits. This candidate has not itself been deployed as a complete release.
+
+## Read 阶段审计与切窗标题检查
+
+在上述终态证据之上，新增现有 read 内部各阶段的元数据计时；切窗等待只读标题，正式 validate 仍每次重新检查私聊/群类型，不缓存权限判断。公开适配保留既有发送、附件、草稿和 owner 参数化校验。
+
+安装后观察仍有约 **6.69–11.95 秒**的读取及 cutoff，不能称为慢读根治，也不代表每条自然消息都已回复。本次不加预算、不增加 UI 调用、不包含可选计量端口。3 个阶段审计与 5 个实际方法离线测试覆盖记录与校验保持；真实 UI 性能、附件和收件端验收仍需各自证据。详见 [阶段说明与复现](docs/READ-PHASES.md)。

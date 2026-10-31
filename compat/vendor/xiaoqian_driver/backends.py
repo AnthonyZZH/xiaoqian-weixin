@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from .protocol import Chat, DriverError, NotSent, SendUnknown
+from .read_phases import phase
 
 
 @runtime_checkable
@@ -115,8 +116,10 @@ class RealBackend:
             spec = importlib.util.spec_from_file_location("_xiaoqian_driver_legacy_adapter", path)
             module = importlib.util.module_from_spec(spec)
             sys.modules[spec.name] = module  # dataclasses resolves its defining module here.
-            spec.loader.exec_module(module)
-            adapter = module.WeChatAdapter(chat.name, mode=chat.mode)
+            with phase(self,"adapter_import"):
+                spec.loader.exec_module(module)
+            with phase(self,"adapter_construct"):
+                adapter = module.WeChatAdapter(chat.name, mode=chat.mode)
             self.module, self.adapter = module, adapter
         if self.chat != chat:
             self.adapter.set_target(chat.name, chat.mode)
@@ -126,8 +129,10 @@ class RealBackend:
 
     def _select(self, chat: Chat):
         adapter = self._load(chat)
-        adapter.open_chat(chat.name)
-        adapter.validate()
+        with phase(self,"select_open_chat"):
+            adapter.open_chat(chat.name)
+        with phase(self,"select_validate"):
+            adapter.validate()
         return adapter
 
     def health(self):
@@ -141,7 +146,8 @@ class RealBackend:
         selected=None
         if journal is not None:
             selected=self._select(chat)
-            journal.recover(selected,chat.key)
+            with phase(self,"draft_recover"):
+                journal.recover(selected,chat.key)
         self.last_controller_receipt=None
         if chat in getattr(self,'_edge_chats',()):
             from .owner_edge_controller import read_latest
@@ -151,7 +157,8 @@ class RealBackend:
             if selected is not self.adapter or self.chat!=chat:
                 raise DriverError('read_selection_mismatch')
             adapter.validate()
-        rows = adapter.read()
+        with phase(self,"adapter_read"):
+            rows = adapter.read()
         self.rows = {row.key: row for row in rows}
         return [{"key": row.key, "text": row.text, "role": row.role,
                  "sender": row.sender, "image_available": row.image is not None,

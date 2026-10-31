@@ -1,3 +1,4 @@
+import {ReadOutcomeJournal} from './read-outcomes.mjs';
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {createInterface} from 'node:readline';
@@ -20,10 +21,17 @@ export class DurableDriverClient {
   call(operation,args={}){
     let captured;
     try{captured=JSON.parse(JSON.stringify(args));}catch{return Promise.resolve({status:'rejected',code:'ARGUMENT_INVALID'});}
-    const job=this.queue.then(()=>this._call(operation,captured));
+    const queuedAt=performance.now();const job=this.queue.then(()=>this._call(operation,captured,{queuedAt}));
     this.queue=job.catch(()=>{});return job;
   }
-  async _call(operation,args){
+  async _call(operation,args,queueContext){
+    const journal=operation==='read'?(this._readJournal??=new ReadOutcomeJournal(this.options.stateDir)):null;
+    const trace=journal?.start(args.targetId);let result,error;
+    if(trace){trace.phase='admitted';trace.admitted=performance.now();trace.queueKnown=Number.isFinite(queueContext?.queuedAt);if(trace.queueKnown)trace.queued=queueContext.queuedAt;this._activeReadTrace=trace;}
+    try{result=await this._performCall(operation,args);return result;}catch(e){error=e;throw e;}
+    finally{if(trace){journal.finish(trace,result,error);if(this._activeReadTrace===trace)this._activeReadTrace=null;}}
+  }
+  async _performCall(operation,args){
     if(this.closed)return {status:'rejected',code:'DRIVER_CLOSED'};
     if(this.paused&&operation!=='health')return {status:'paused',code:'DRIVER_PAUSED'};
     if(!['health','schedule_poll'].includes(operation)&&(!this.targets.has(args.targetId)||Object.hasOwn(args,'title')||Object.hasOwn(args,'mode')))
@@ -60,7 +68,7 @@ export class DurableDriverClient {
     });
     child.stderr.resume();
     child.on('error',()=>{if(this.child===child)this._stop('PROCESS_ERROR');});
-    child.on('exit',()=>{lines.close();if(this.child===child)this._stop('PROCESS_EXITED');});
+    child.on('exit',(code,signal)=>{this._readJournal?.exit(child.pid,code,signal,this._readChildTrace?.child===child?this._readChildTrace:null);lines.close();if(this.child===child)this._stop('PROCESS_EXITED');});
     const config={mode:this.options.mode==='live'?'real':'fake',
       allow_real:this.options.mode==='live'&&this.options.liveEnabled===true,
       adapter_root:this.options.legacyDir,
@@ -82,6 +90,7 @@ export class DurableDriverClient {
     if(this.pending)throw new Error('CONCURRENT_REQUEST');
     return new Promise((resolve,reject)=>{
       const id=randomUUID();
+      const trace=this._activeReadTrace;if(trace){trace.phase=operation==='read'?'rpc_read_response':'rpc_initialize';trace.pid=this.child.pid;if(operation==='read'){trace.rpcId=id;this._readChildTrace={child:this.child,rpcId:id,id:trace.id};}}
       const timer=setTimeout(()=>this._stop('RPC_TIMEOUT'),this.timeoutMs);
       this.pending={id,timer,resolve,reject};
       this.child.stdin.write(JSON.stringify({id,operation,args})+'\n',error=>{
@@ -89,6 +98,7 @@ export class DurableDriverClient {
       });
     });
   }
+  readDiagnosticsStatus(){return this._readJournal?.status()||{revision:'read-outcomes/v1',started:0,finished:0,pending:0,writeFailures:0,last:null};}
   _stop(reason){
     const child=this.child;this.child=null;
     const pending=this.pending;this.pending=null;
@@ -101,3 +111,5 @@ export class DurableDriverClient {
     this._stop('DRIVER_CLOSED');
   }
 }
+
+DurableDriverClient.prototype._call.readOutcomeRevision='read-outcomes/v1';
