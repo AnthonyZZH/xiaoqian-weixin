@@ -289,3 +289,11 @@ See [source closeout and remaining acceptance](docs/V6B-CLOSEOUT.md) for group p
 **附件下载仍未启用，计量仍撤回，不能据此称全项目完成。** 具体实现、回退、worker 退出约束和离线复现见 [原生查询与回收说明](docs/READ-NATIVE.md)。
 
 本次公开候选在服务器隔离目录完成 **43 个 Python + 9 个 Node 离线测试，共 52 项，0 失败、0 跳过**；另通过入口语法检查。其中包含 Windows 临时 venv 的真实 worker PID/读/退出测试，无包下载、真实微信、模型调用或对外发送。
+
+## 附件端口：边界已接，文件读取尚未完成
+
+已同步 canonical message handle → client/worker/RPC 的 inspect、save-as、completion 端口，保留 owner 私聊入口、群拒绝、当前身份/代际/行 token 校验、保存前持久意图和不确定操作不重试。22:26 UTC 的实际边界检查证实未知消息与群调用被拒绝，未下载文件或操作 UI。
+
+**下载仍关闭；真实文件卡、保存控件、独立完成证明及 TXT/Word/PDF 内容送入 Agent 尚未验收，不能称为微信文件读取已完成。** 九个临时入口和清理入口已撤回，本提交不包含资料/历史探针或运行 profile。清理后自然 read 约 2.3–4.1 秒、原 Host 未重启，仅为该时段样本；计量仍撤回。详见 [附件端口说明与离线复现](docs/READ-ATTACHMENT-PORTS.md)。
+
+本次仅运行受影响接口回归：**6 个 Python + 11 个 Node 用例，17 项全部通过，0 失败、0 跳过**，另通过入口语法检查。包含真实 fake-worker/RPC、canonical 完成链与保存幂等验证；不代表真实微信附件下载通过。

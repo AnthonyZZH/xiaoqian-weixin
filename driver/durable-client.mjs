@@ -36,8 +36,12 @@ export class DurableDriverClient {
     if(this.paused&&operation!=='health')return {status:'paused',code:'DRIVER_PAUSED'};
     if(!['health','schedule_poll'].includes(operation)&&(!this.targets.has(args.targetId)||Object.hasOwn(args,'title')||Object.hasOwn(args,'mode')))
       return {status:'rejected',code:'DRIVER_TARGET_DENIED'};
-    if(!['health','read','ack','send_text','transcribe','extract_image','send_image','media_catalog','media_review','media_import_file','media_import_static','media_preview','media_resolve','schedule_poll','schedule_heard','schedule_spoke','schedule_claim','schedule_renew','schedule_prepare','schedule_finish'].includes(operation))
+    if(!['health','read','ack','attachment_inspect','attachment_save_as','attachment_completion','send_text','transcribe','extract_image','send_image','media_catalog','media_review','media_import_file','media_import_static','media_preview','media_resolve','schedule_poll','schedule_heard','schedule_spoke','schedule_claim','schedule_renew','schedule_prepare','schedule_finish'].includes(operation))
       return {status:'rejected',code:'OPERATION_DENIED'};
+    if(['attachment_inspect','attachment_save_as','attachment_completion'].includes(operation)){
+      const target=this.targets.get(args.targetId);
+      if(target?.owner!==true||target?.mode!=='private')return {status:'rejected',code:'OWNER_ATTACHMENT_REQUIRED'};
+    }
     try{
       await this._ensure();
       return await this._request(operation,args);
@@ -113,3 +117,5 @@ export class DurableDriverClient {
 }
 
 DurableDriverClient.prototype._call.readOutcomeRevision='read-outcomes/v1';
+
+DurableDriverClient.prototype.attachmentPortsRevision='attachment-ports/v1';

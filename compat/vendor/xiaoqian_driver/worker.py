@@ -95,6 +95,8 @@ def serve():
                         else:
                             backend = FakeBackend(config.fake_options, args["generation"], args["audit_path"])
                         backend._read_phases=ReadPhases(Path(args["audit_path"]).parent,args["generation"])
+                        backend._attachment_generation=args["generation"]
+                        backend._attachment_audit_path=args["audit_path"]
                         result = {"protocol": VERSION, "pid": os.getpid(), "mode": config.mode}
                     else:
                         if backend is None:
@@ -103,6 +105,10 @@ def serve():
                             result = {"pid": os.getpid(), "mode": config.mode}
                         elif command == "health":
                             result = backend.health()
+                        elif command in ("attachment_inspect","attachment_save_as","attachment_completion"):
+                            from .attachment_transport import dispatch,AttachmentError
+                            try: result=dispatch(backend,config,command,args,backend._attachment_generation,backend._attachment_audit_path)
+                            except AttachmentError as exc: raise DriverError(str(exc)) from None
                         elif command in ("read", "send", "send_file", "transcribe", "extract_image"):
                             chat = Chat(**args["chat"])
                             if config.mode == "real" and chat not in config.allowed_chats:
@@ -110,6 +116,8 @@ def serve():
                             if command == "read":
                                 with backend._read_phases.request(request_id):
                                     result = {"rows": backend.read(chat)}
+                                backend._attachment_rows={row["key"]:dict(row) for row in result["rows"]}
+                                backend._attachment_chat_key=chat.key
                                 if getattr(backend,"last_controller_receipt",None):result["controller_receipt"]=backend.last_controller_receipt
                             elif command == "transcribe":
                                 key = args.get("source_key")

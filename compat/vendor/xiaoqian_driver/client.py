@@ -141,6 +141,7 @@ class DriverClient:
                                 else:
                                     job.stage="inbox_commit"
                                     result=self._state.ingest(chat,rows)
+                                self._attachment_snapshot_generation=self._generation
                             elif job.command == "health":
                                 result = {**result, "generation": self._generation, "pid": self._process.pid}
                     job.stage="done"
@@ -241,6 +242,10 @@ class DriverClient:
             raise
 
     def _request(self, command: str, args: dict, deadline: float) -> dict:
+        if command in ("attachment_inspect","attachment_save_as","attachment_completion"):
+            from .attachment_transport import prepare, AttachmentError
+            try: args=prepare(self,Chat(**args["chat"]),args["card"],args["scope"],deadline)
+            except AttachmentError as exc: raise DriverError(str(exc)) from None
         self._remaining(deadline)
         if command != "hello" and not getattr(self, "_worker_ready", False):
             raise DriverError("worker_not_ready")
@@ -355,6 +360,11 @@ class DriverClient:
         except sqlite3.Error:
             return SendResult(operation_id, "unknown", "state_commit_failed_unknown")
         return result
+
+    def attachment_command(self, chat, command, card, scope, *, timeout=None):
+        if command not in ("attachment_inspect","attachment_save_as","attachment_completion"):
+            raise DriverError("attachment_command_denied")
+        return self._submit(command,{"chat":chat.to_dict(),"card":card,"scope":scope},timeout)
 
     def health(self, *, timeout: float | None = None) -> dict:
         return self._submit("health", {}, timeout)

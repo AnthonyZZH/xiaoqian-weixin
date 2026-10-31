@@ -108,7 +108,15 @@ def serve():
                 if target_id not in chats:
                     raise ValueError("target_denied")
                 chat = chats[target_id]
-                if op == "read":
+                if op in ("attachment_inspect","attachment_save_as","attachment_completion"):
+                    if target_id not in trusted_owner or chat.mode!="private":raise ValueError("owner_attachment_required")
+                    import time
+                    scope=args["scope"]
+                    budget=min(30.0,(scope["deadline"]-time.time()*1000)/1000)
+                    if budget<=0:raise ValueError("attachment_deadline")
+                    data=client.attachment_command(chat,op,args["card"],scope,timeout=budget)
+                    reply(request_id,"ok",code="ATTACHMENT",data=data)
+                elif op == "read":
                     result = client.read(chat, request_id=request_id)
                     rows = []
                     for item in result.messages:

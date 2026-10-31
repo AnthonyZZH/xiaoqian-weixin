@@ -1,6 +1,6 @@
 {
   "sourceCommit": "31d600923536d01df6702a344ae8b9abf2dc2235",
-  "compatibilityDriverSha256": "5f48f935af3bc5cc2389e716a8d279eebf61707297840d01917af7e72fdf6140",
+  "compatibilityDriverSha256": "863d1626434972c80aea669610c6686f6510c1608c6fd02c17028adf56b4fea0",
   "productionDriverMigration": "pinned-generation; fulltext-v2 not enabled",
   "runtimeDataIncluded": false,
   "hotfixCoreCommit": "02791fa0059e452f95a117187fb1bc15c071c434",
@@ -17,7 +17,8 @@
     "empty-legacy-task-submission-hidden",
     "read-terminal-outcome-evidence",
     "read-stage-metadata-and-title-selection",
-    "native-ui-predicate-lookup-and-confirmed-worker-recovery"
+    "native-ui-predicate-lookup-and-confirmed-worker-recovery",
+    "canonical-owner-attachment-ports-download-disabled"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -65,5 +66,13 @@
     "wholeSnapshotDeploymentClaimed": false,
     "attachmentDownloadEnabled": false,
     "meteringEnabled": false
+  },
+  "attachmentPorts": {
+    "sourceManifest": "docs/READ-ATTACHMENT-PORTS-SOURCE.json",
+    "downloadEnabled": false,
+    "nativeAcceptanceComplete": false,
+    "endToEndAgentFileReadingAccepted": false,
+    "temporaryProbesIncluded": false,
+    "wholeSnapshotDeploymentClaimed": false
   }
 }

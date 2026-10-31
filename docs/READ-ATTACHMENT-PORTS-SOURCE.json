@@ -1,0 +1,44 @@
+{
+  "publicBase": "9eef6cb4239567147b9ef37853a6de636cc93baa",
+  "component": "attachment-ports/v1",
+  "installedFileSha256": {
+    "client.py": "0094bc729ae4e21b13eed87103eb9e1d2f5d6f1920b1225ef824509d0dc393b6",
+    "worker.py": "b1cbbd77fe94523c3dcc5a32faada0103490f32bab981e8460a395c38c5c996e",
+    "bridge_rpc.py": "2de0db9294ce1bf54c45b36735305eefa349b93a25f48bf6378767fe4ccee195",
+    "attachment_transport.py": "a4fd50c1385ed19888cb11f1340ba486fed0ebb8eb01f1703d45fd702c6a14e5",
+    "durable-client.mjs": "ecabb9bec3c9a12ed67863b8962fe57e98a86c3fb06db0b7518c899d88eaa8be",
+    "attachment-ingress-pdf.mjs": "2733662e2b1dc762014ebf883c08e03a261eb8ac05434667043c16780434d0d8",
+    "broker-ui-port.mjs": "4bd9dbf82b00eba501467a0118c4c50b824764335178288ee1cba7f2b0454974",
+    "download-broker-pdf.mjs": "093e91bb8ec443659f2e6a2d7bec8cfaad0be77461547f541f9020c122bda59e",
+    "host-binding.mjs": "9ca067f08cc1d05e49cdb17538d63378a6945695435ee484fc741a35c5b03695",
+    "current-driver-port.mjs": "d51f9a74f3ccf115a18bb85ff217b4905dbd411d583b65537e28c22cce612044"
+  },
+  "publicFileSha256": {
+    "compat/vendor/xiaoqian_driver/client.py": "0094bc729ae4e21b13eed87103eb9e1d2f5d6f1920b1225ef824509d0dc393b6",
+    "compat/vendor/xiaoqian_driver/attachment_transport.py": "a4fd50c1385ed19888cb11f1340ba486fed0ebb8eb01f1703d45fd702c6a14e5",
+    "driver/durable-client.mjs": "ecabb9bec3c9a12ed67863b8962fe57e98a86c3fb06db0b7518c899d88eaa8be",
+    "compat/vendor/xiaoqian_driver/worker.py": "6eac115701c9331301a9d4ed7dd89457af54f1bb4d15c443007d6a91ce3d0fbe",
+    "compat/driver/bridge_rpc.py": "863d1626434972c80aea669610c6686f6510c1608c6fd02c17028adf56b4fea0",
+    "vendor/attachment-ingress/attachment-ingress-pdf.mjs": "4601c8f6758e54600c7ffbd7594df792c63d656251c50b00a6e1bb047f5244c1",
+    "vendor/attachment-ingress/broker-ui-port.mjs": "4bd9dbf82b00eba501467a0118c4c50b824764335178288ee1cba7f2b0454974",
+    "vendor/attachment-ingress/download-broker-pdf.mjs": "d207d6e9607a6cac12ca78396d13bbeb2b632ea3ba188e23b68b9c10f803448d",
+    "vendor/attachment-ingress/host-binding.mjs": "9ca067f08cc1d05e49cdb17538d63378a6945695435ee484fc741a35c5b03695",
+    "vendor/attachment-ingress/current-driver-port.mjs": "d51f9a74f3ccf115a18bb85ff217b4905dbd411d583b65537e28c22cce612044"
+  },
+  "publicCompatibilityDifferences": [
+    "worker keeps public parameterized owner config and omits raw-error runtime hook",
+    "RPC keeps public owner config and shared vendor fallback",
+    "two new Node helper files omit trailing blank EOF lines only"
+  ],
+  "omittedTemporarySources": [
+    "owner_file_history",
+    "owner header/info/navigation probe hooks",
+    "temporary profile and maintenance entries"
+  ],
+  "nativeDownloadEnabled": false,
+  "actualFileCardAccepted": false,
+  "actualSaveAsAccepted": false,
+  "actualCompletionAccepted": false,
+  "endToEndAgentFileReadingAccepted": false,
+  "runtimeProofIncluded": false
+}
