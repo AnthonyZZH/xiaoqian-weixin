@@ -1,29 +1,27 @@
-import test from 'node:test';import assert from 'node:assert/strict';import crypto from 'node:crypto';
-import {explicitlyCallsName,install} from './index.mjs';
-const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
-test('current explicit vocative accepted, discussion/quotes not matched',()=>{
- for(const s of ['小千','小千，你在吗','小千帮我查一下','@小千 你好','小千：请看这个'])assert.equal(explicitlyCallsName(s),true,s);
- for(const s of ['大家说小千很可爱','小千的回复不错','小千说她不知道','“小千，你好”','> 小千你看看','转发：小千你好','小千：我不知道','普通聊天'])assert.equal(explicitlyCallsName(s),false,s);
-});
-function fixture(){
- const states={'bread-group':{messages:{},replyPermits:{old:{status:'open'}},groupPaused:false},'owner-dm':{messages:{},replyPermits:{}}};let calls=[];
- const core={chats:new Map([['bread-group',{mode:'group',owner:false}],['owner-dm',{id:'owner-dm',mode:'private',owner:true}]]),state:id=>states[id],chat:id=>core.chats.get(id),handles:new Map(),serial:fn=>Promise.resolve().then(fn),store:{data:{paused:false},save(){},audit(){}},permits:{active:new Map(),issue(id,o){const key=hash(o.sourceId);states[id].replyPermits[key]={status:'open'};return key;},consume(id,c){return c;},close(id,key){states[id].replyPermits[key].status='policy-changed';}},async handle(){return{};},async ingest(r){for(const m of r.messages){const g=this.permits.issue(r.chatId,{sourceId:m.id});states[r.chatId].messages[hash(m.id)]={status:'accepted',grantId:g};}return{ackable:r.messages.map(m=>m.id),accepted:r.messages.length};},async send(id,a,c){return driver.call('send_text',{targetId:id,idempotencyKey:a.deliveryId+':text'});}};
- const driver={async call(op,args){calls.push({op,args});return{status:'ok'};}};
- return {core,driver,states,calls};
-}
-test('ordinary input ACKed without Agent, addressed input receives grant',async()=>{
- const f=fixture();const p=install(f,{normalizeMessage:m=>m});await p.ready;
- assert.equal(f.states['bread-group'].replyPermits.old.status,'policy-changed');
- const a=await f.core.ingest({chatId:'bread-group',messages:[{id:'ordinary',role:'user',text:'普通闲聊'},{id:'call',role:'user',text:'小千，你在吗'}]});
- assert.equal(a.accepted,1);assert.deepEqual(a.ackable,['call','ordinary']);assert.equal(f.states['bread-group'].messages[hash('ordinary')].status,'baseline');
- const g=f.states['bread-group'].messages[hash('call')].grantId;assert.doesNotThrow(()=>f.core.permits.consume('bread-group',{grantId:g}));
- assert.throws(()=>f.core.permits.consume('bread-group',{grantId:'old'}),/GROUP_NOT_ADDRESSED/);
- assert.equal((await f.core.send('bread-group',{text:'synthetic'},{grantId:g})).status,'ok');
-});
-test('send and actual driver reject unaddressed group; private unaffected',async()=>{
- const f=fixture();const p=install(f,{normalizeMessage:m=>m});await p.ready;
- await assert.rejects(f.core.send('bread-group',{text:'x'},{grantId:'old'}),/GROUP_NOT_ADDRESSED/);
- assert.equal((await f.driver.call('send_text',{targetId:'bread-group',idempotencyKey:'old:text'})).status,'rejected');
- const r=await f.core.ingest({chatId:'owner-dm',messages:[{id:'private',role:'user',text:'普通私聊'}]});assert.equal(r.accepted,1);
- p.close();assert.equal(f.states['bread-group'].groupPaused,true);
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {pathToFileURL,fileURLToPath} from 'node:url';
+import {mentionsName,decideTopic,noteTopicReply,TOPIC_IDLE_MS} from './group-topic-rules.mjs';import {install} from './index.mjs';
+const msg=(id,text,sender='SYNTHETIC MEMBER')=>({id,text,sender,role:'user'});
+test('name and displayed mention trigger at any position, including zero-width separators',()=>{for(const s of ['小千','请小千看看','大家提到小千了','你好，@小千','小\u200b千你在吗'])assert.equal(mentionsName(s),true);assert.equal(mentionsName('ordinary'),false);});
+test('topic continues without repeated name and ends on explicit stop',()=>{const s={};assert.equal(decideTopic(s,msg('a','请问小千，量子轨道是什么'),1000).allow,true);noteTopicReply(s,'量子轨道描述电子',1100);for(let i=0;i<8;i++){assert.equal(decideTopic(s,msg('b'+i,'那具体呢'),1200+i).allow,true);noteTopicReply(s,'可以继续解释电子轨道',1250+i);}assert.equal(decideTopic(s,msg('stop','先别说话'),1400).reason,'topic_stop');assert.equal(s.groupTopic,null);assert.equal(decideTopic(s,msg('after','那具体呢'),1500).allow,false);});
+test('unrelated chat, explicit topic shift and idle expiration never open whole group',()=>{const s={};decideTopic(s,msg('a','小千，量子轨道'),1000);noteTopicReply(s,'电子轨道',1100);assert.equal(decideTopic(s,msg('other','今晚吃火锅','OTHER'),1200).allow,false);assert.equal(decideTopic(s,msg('shift','换个话题'),1300).allow,false);assert.equal(s.groupTopic,null);decideTopic(s,msg('c','小千，量子轨道'),2000);assert.equal(decideTopic(s,msg('late','量子轨道'),2000+TOPIC_IDLE_MS+1).allow,false);});
+test('assistant echo cannot start a topic; anonymous continuation needs immediate reply adjacency',()=>{const s={};assert.equal(decideTopic(s,{...msg('self','小千'),role:'assistant'},1000).allow,false);assert.equal(s.groupTopic,undefined);decideTopic(s,msg('call','小千，量子轨道',''),2000);noteTopicReply(s,'电子轨道',2100);assert.equal(decideTopic(s,msg('anon','那具体呢',''),2200).allow,true);assert.equal(decideTopic(s,msg('other','今晚吃火锅','OTHER'),2300).allow,false);assert.equal(decideTopic(s,msg('anon2','那具体呢',''),2400).allow,false);});
+test('real rc4 replaces old prompt, dispatches topic followup, stops output and preserves private chat',async()=>{
+ const base=process.env.XQ_NATIVE_PACKAGE_ROOT||'C:/Apps/Harness/node_modules/@deepseek-ai/',load=n=>import(pathToFileURL(base+n+'/lib/index.js').href),{Context}=await load('cordis'),{LlmAdapter}=await load('dsh-llm');
+ const ctx=new Context(),fibers=[],root=fs.mkdtempSync(path.join(os.tmpdir(),'xq-topic-sdk-'));let bridge,policy,legacy,count=0,privateCount=0;const sends=[],requests=[];
+ class Offline extends LlmAdapter{async *stream(r){requests.push(JSON.stringify(r));const n=JSON.stringify(r).includes('ordinary private chat')?++privateCount:++count;if(n%2){const block={type:'tool-call',id:'synthetic-'+n,name:'wechat_reply',arguments:JSON.stringify({text:'量子轨道可以继续讨论'})};yield{type:'block-start',index:0,blockType:'tool-call'};yield{type:'tool-call-delta',index:0,id:block.id,name:block.name,argumentsDelta:block.arguments};yield{type:'block-end',index:0,block};yield{type:'finish',reason:{kind:'tool-calls'}};}else{yield{type:'finish',reason:{kind:'stop'}};}}}
+ try{
+  for(const n of ['dsh-system-prompt','dsh-session','dsh-agent','dsh-llm','dsh-tools','dsh-session-projection','dsh-agent-loop'])fibers.push(ctx.plugin((await load(n)).default,{}));
+  fibers.push(ctx.plugin(await load('dsh-session-persistence-jsonl'),{root:path.join(root,'sessions'),compression:'none'}));fibers.push(ctx.plugin({inject:['llm'],apply(c){c.llm.registerAdapter(['offline-topic'],new Offline());}},{}));for(const f of fibers)await f.await();
+  const {defineTool}=await load('dsh-tools'),source=fileURLToPath(new URL('../../src/index.mjs',import.meta.url)),{createBridge}=await import(pathToFileURL(source).href),{normalizeMessage}=await import(pathToFileURL(source.replace('index.mjs','policy.mjs')).href);
+  const driver={maxChars:1000,pause(){},resume(){},close(){},async call(op,args){if(op==='send_text'){sends.push(args);return{status:'ok'};}return{status:'ok',messages:[]};}};
+  bridge=await createBridge(ctx,{stateDir:path.join(root,'bridge'),mode:'mock',model:{provider:'offline-topic',model:'synthetic'},chats:[{id:'bread-group',title:'SYNTHETIC GROUP',mode:'group',owner:false,persona:'SYNTHETIC ORIGINAL GROUP PERSONA'},{id:'owner-dm',title:'SYNTHETIC OWNER',mode:'private',owner:true}]},{driver,defineTool});bridge.core.resume();const beforeIngest=bridge.core.ingest;if(!ctx.xiaoqianBridge)ctx.reflect.provide('xiaoqianBridge',bridge);const lifecycle=await import('./index.mjs');const disposeRace=ctx.plugin(lifecycle,{source:new URL('../../',import.meta.url).href,work:root});await disposeRace.dispose();await new Promise(r=>setTimeout(r,40));assert.equal(bridge.core.ingest,beforeIngest);let h=await bridge.core.handle('bread-group');const originalSession=h.agent.session.id;
+  const nativeDriverCall=driver.call;legacy=(await import('../../tests/fixtures/legacy-group-policy-v1.mjs')).install(bridge,{normalizeMessage});await legacy.ready;policy=install(bridge,{normalizeMessage,nativeDriverCall,mentionAliases:['TestBot']});await policy.ready;h=bridge.core.handles.get('bread-group');assert.equal(h.agent.session.id,originalSession);
+  const assembly=await h.agent.ctx.systemPrompt.assemble({scope:h.agent,agent:h.agent});const section=assembly.sections.filter(s=>s.name==='group-addressed-only');assert.equal(section.length,1);assert.match(section[0].text,/任何位置/);assert.doesNotMatch(section[0].text,/OLD_PREFIX_ONLY/);
+  await bridge.core.ingest({chatId:'bread-group',messages:[msg('first','@TestBot\u2005\u91cf\u5b50\u7ea0\u7f20\u662f\u4ec0\u4e48')]});await h.agent.whenIdle();assert.equal(sends.length,1);
+  await bridge.core.ingest({chatId:'bread-group',messages:[msg('follow','那具体呢')]});await h.agent.whenIdle();assert.equal(sends.length,2);
+  await bridge.core.ingest({chatId:'bread-group',messages:[msg('stop','先别说话'),msg('ignored','那具体呢')]});assert.equal(sends.length,2);assert.equal(bridge.core.state('bread-group').groupTopic,null);
+  const schemas=await h.agent.ctx.tools.schemas(h.agent);assert.equal(schemas.some(t=>/^owner_|xiaoqian_library/.test(t.name)),false);
+  await bridge.core.ingest({chatId:'owner-dm',messages:[msg('private','ordinary private chat')]});await bridge.core.handles.get('owner-dm').agent.whenIdle();for(let i=0;i<20&&sends.length<3;i++)await new Promise(r=>setTimeout(r,10));assert.equal(sends.length,3);assert.equal(sends[2].targetId,'owner-dm');assert.ok(requests.every(r=>!r.includes('OLD_PREFIX_ONLY')));
+  console.log(JSON.stringify({realSdk:true,groupToolDispatches:2,privateToolDispatches:1,stopPreventedFollowup:true,oldPromptReplaced:true,groupOwnerTools:false,paidCalls:0,wechatSends:0}));
+ }finally{policy?.close();legacy?.close();await bridge?.core.close();for(const f of fibers.reverse())await f.dispose();fs.rmSync(root,{recursive:true,force:true});}
 });

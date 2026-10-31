@@ -155,7 +155,7 @@ def recover_live_edge(db,chat,rows,receipt,verify):
         raise ValueError('invalid_controller_continuity')
     saved=db.execute('SELECT items,epoch,viewport,sequence FROM identity_observation WHERE chat=?',(chat.key,)).fetchone()
     if saved and epoch==saved[1] and viewport==saved[2] and sequence<=saved[3]:raise ValueError('controller_receipt_replayed')
-    old=json.loads(saved[0]) if saved and epoch==saved[1] and viewport==saved[2] else None
+    old=json.loads(saved[0]) if saved and viewport==saved[2] else None
     items=None;status='shadow_observation_started'
     if old and rows:
         candidates=[]

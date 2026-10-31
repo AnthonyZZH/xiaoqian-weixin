@@ -48,8 +48,10 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse(self.edge([row('again','x'*12000),row('again2','fresh')]).messages)
     def test_switch_epoch_does_not_replay_page(self):
         self.seed();self.edge([row('x','shadow')])
-        self.assertFalse(self.edge([row('y','shadow'),row('z','uncertain')],epoch='worker2').messages)
-        self.assertEqual([m.text for m in self.edge([row('y','shadow'),row('z','uncertain'),row('t','new')],epoch='worker2').messages],['new'])
+        result=self.edge([row('y','shadow'),row('z','new-after-certified-edge')],epoch='worker2')
+        self.assertEqual([m.text for m in result.messages],['new-after-certified-edge'])
+        self.store.ack([m.message_id for m in result.messages])
+        self.assertEqual([m.text for m in self.edge([row('y','shadow'),row('z','new-after-certified-edge'),row('t','new')],epoch='worker2').messages],['new'])
     def test_history_does_not_replay_or_move_horizon(self):
         self.seed();self.edge([row('x','shadow')])
         self.assertFalse(self.store.ingest(OWNER,[row('rebuilt','persisted old')]).messages)

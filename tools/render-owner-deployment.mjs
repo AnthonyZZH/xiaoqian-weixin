@@ -13,4 +13,8 @@ if(options['long-tasks']==='true'){if(!path.isAbsolute(options['task-root']||'')
 if(options['owner-files']==='true'){if(!path.isAbsolute(options['work-root']||'')||!path.isAbsolute(options['base-python']||''))throw Error('DEDICATED_WORK_ROOT_AND_PYTHON_REQUIRED');config.ownerFiles={enabled:true,python:options['base-python'],projects:{'owner-work':options['work-root']}};}
 if(options['remote-media']==='true'){if(!path.isAbsolute(options['base-python']||'')||!path.isAbsolute(options['site-packages']||''))throw Error('BASE_PYTHON_AND_SITE_PACKAGES_REQUIRED');config.remoteMediaImport={enabled:true,python:options['base-python'],sitePackages:options['site-packages']};}
 const patch=[{insert:[{id:'xiaoqian-wechat-native',name:pathToFileURL(path.resolve(import.meta.dirname,'../src/index.mjs')).href,config}]}];
+if(options['group-title']){
+ const work=path.join(options['state-root'],'group-policy-runtime');fs.mkdirSync(work,{recursive:true});
+ patch.push({insert:[{id:'xiaoqian-group-topic-policy-v2',enabled:false},{id:'xiaoqian-group-single-owner-v6b',name:pathToFileURL(path.resolve(import.meta.dirname,'group-addressed-policy/index.mjs')).href,config:{source:pathToFileURL(path.resolve(import.meta.dirname,'..')+path.sep).href,work,mentionAliases:options['group-mention-alias']?[options['group-mention-alias']]:[]}}]});
+}
 fs.writeFileSync(options.output,JSON.stringify(patch,null,2),{flag:'wx'});console.log(JSON.stringify({output:options.output,startPaused:true,ownerOnly:config.chats.length===1,configuredChats:config.chats.length,automaticRotation:false,credentialsWritten:false}));

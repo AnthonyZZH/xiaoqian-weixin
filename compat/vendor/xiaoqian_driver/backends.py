@@ -137,6 +137,10 @@ class RealBackend:
         return {"ready": True, "backend_loaded": self.adapter is not None, "mode": "real"}
 
     def read(self, chat: Chat):
+        journal=getattr(self,'_draft_journal',None)
+        if journal is not None:
+            adapter=self._select(chat)
+            journal.recover(adapter,chat.key)
         self.last_controller_receipt=None
         if chat in getattr(self,'_edge_chats',()):
             from .owner_edge_controller import read_latest
@@ -165,6 +169,13 @@ class RealBackend:
             # No call to send yet, so no irreversible action can have happened.
             raise NotSent("preflight_failed") from None
         try:
+            journal=getattr(self,'_draft_journal',None)
+            if journal is not None:
+                operation=getattr(self,'_draft_operation_id',None)
+                if not isinstance(operation,str) or not operation:raise NotSent('draft_operation_required')
+                journal.recover(adapter,chat.key)
+                adapter._draft_journal=journal
+                adapter._draft_context={'operation':operation,'chat':chat.key}
             missing = adapter.send(text, max_chars=max_chars, at=at)
         except Exception as exc:
             if isinstance(exc,getattr(self.module,'SendNotAttempted',())):
@@ -172,6 +183,8 @@ class RealBackend:
             if isinstance(exc,getattr(self.module,'SendUncertain',())):
                 raise SendUnknown(exc.code) from None
             raise SendUnknown("adapter_send_unknown") from None
+        finally:
+            adapter._draft_context=None
         return {"status": "success", "code": "sent", "confirmation": "adapter_input_cleared",
                 "missing_mentions": list(missing or [])}
 

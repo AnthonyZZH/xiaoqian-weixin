@@ -272,7 +272,7 @@ class DriverClient:
         except sqlite3.Error:
             return SendResult(operation_id, "failed", "state_reservation_failed")
         try:
-            raw = self._request(job.command, payload, job.deadline)
+            raw = self._request(job.command, {**payload, "operation_id":operation_id}, job.deadline)
             if raw.get("status") not in ("success", "failed", "unknown") or not isinstance(raw.get("code"), str):
                 raise DriverError("invalid_send_response")
             confirmation, missing = raw.get("confirmation", ""), raw.get("missing_mentions", [])
@@ -299,6 +299,10 @@ class DriverClient:
         return self._submit("restart", {}, timeout)
 
     def read(self, chat: Chat, *, timeout: float | None = None) -> ReadResult:
+        # Startup plus up to 5s first-frame media loading and bounded UI control work.
+        # Explicit caller deadlines and all send budgets remain unchanged.
+        if timeout is None:
+            timeout=max(self.config.command_timeout,min(12.0,self.config.startup_timeout+7.0))
         return self._submit("read", {"chat": chat.to_dict()}, timeout)
 
     def pending(self, chat: Chat):

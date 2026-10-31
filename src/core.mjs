@@ -5,6 +5,8 @@ import {validateChats,normalizeMessage,authorize,requireValue,textArg,allowedToo
 
 export const rotationCoreRevision='rotation-core-v1-20261029';
 export class WeChatCore {
+  #driverMessages=new WeakSet();
+  isTrustedDriverMessage(message){return this.#driverMessages.has(message);}
   constructor({stateDir,chats,agents,driver,media,features,evidenceMemory,initiative,capabilities={},sessions,registerAgent,model={provider:'deepseek',model:'deepseek-chat'}}) {
     this.chats=validateChats(chats);this.agents=agents;this.driver=driver;this.media=media;this.features=features;this.evidence=evidenceMemory;this.initiative=initiative;
     this.capabilities=capabilities;this.sessions=sessions;this.registerAgent=registerAgent;this.model=model;this.handles=new Map();this.jobs=new Map();this.closed=false;
@@ -117,6 +119,11 @@ export class WeChatCore {
         s.messages[key]={status:'baseline'};this.store.save();duplicate++;ackable.push(m.id);continue;
       }
       if(chat.mode==='group'&&s.groupPaused){s.messages[key]={status:'baseline'};this.store.save();ackable.push(m.id);continue;}
+      if(chat.owner===true&&chat.mode==='private'&&this.#driverMessages.has(raw)&&this.capabilities.consumeOwnerApproval){
+        let control;try{control=await this.capabilities.consumeOwnerApproval({chatId,message:raw});}
+        catch{if(/^(同意|拒绝|网页审批) [A-Za-z0-9_-]{1,100} [a-f0-9]{16}$/.test(m.text.trim()))control={code:'APPROVAL_TRANSPORT_FAILED'};}
+        if(control?.consumed||control?.code){s.messages[key]={status:'accepted',control:'owner-approval'};this.store.save();accepted++;ackable.push(m.id);this.store.audit('OWNER_APPROVAL_CONTROL',chatId,{handled:control.consumed===true});continue;}
+      }
       const h=await this.handle(chatId);
       const nativeMessageId='message-'+crypto.randomUUID();
       const grantId=this.permits.issue(chatId,{sourceId:m.id,nativeMessageId});
@@ -170,6 +177,7 @@ export class WeChatCore {
             m.media.push({id:saved.media_id,kind:'static_preview'});
           }
         }
+        if(m.role==='user'&&raw.voiceAvailable!==true&&raw.imageAvailable!==true&&raw.fileAvailable!==true&&raw.attachmentAvailable!==true&&(!raw.media||Array.isArray(raw.media)&&raw.media.length===0)&&m.media.length===0)this.#driverMessages.add(m);
         enriched.push(m);
       }
       receipt=await this.ingest({chatId,messages:enriched});receipt.ackable.push(...rejectedAck);
@@ -273,7 +281,7 @@ export class WeChatCore {
         effects++;
       }
       if(stickerId){requireValue(!context.signal?.aborted,'TOOL_CANCELLED');result=await this.driver.call('send_image',{targetId:chatId,stickerId,idempotencyKey:key+':media',mediaKind:asset.kind,...(asset.path?{path:asset.path}:{})});if(result.status!=='ok')throw Object.assign(new Error('SEND_NOT_CONFIRMED'),{outcome:result});effects++;}
-      s.deliveries[key]={status:'ok',...(context.grantId?{grantId:context.grantId}:{})};await this.initiative?.spoke(chatId,{opening,sourceId:key});s.pendingWake=null;
+      s.deliveries[key]={status:'ok',...(context.grantId?{grantId:context.grantId}:{})};await this.initiative?.spoke(chatId,{opening,sourceId:key});if(context.preservePendingWake!==true)s.pendingWake=null;
     }catch(e){
       const knownNotSent=effects===0&&e.outcome?.status==='rejected';
       s.deliveries[key]={...(context.grantId?{grantId:context.grantId}:{}),status:knownNotSent?'rejected':'unknown',code:knownNotSent?e.outcome.code:'SEND_UNCONFIRMED'};

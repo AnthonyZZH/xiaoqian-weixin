@@ -17,6 +17,7 @@ export function validateServer(raw){
  if(raw.transport==='stdio'){
   if(typeof raw.command!=='string'||!raw.command||raw.command.length>500||/[\r\n\0]/.test(raw.command))fail('COMMAND_INVALID');
   if(!Array.isArray(raw.args)||raw.args.length>100||raw.args.some(a=>typeof a!=='string'||a.length>2000||a.includes('\0')))fail('ARGS_INVALID');
+  if(raw.args.some(v=>/(?:--?)(?:token|api[-_]?key|password|secret|authorization|credential)\b|^(?:sk-|github_pat_|Bearer\s)/i.test(v)))fail('EXTRA_CREDENTIALS_REQUIRE_HOST_FLOW');
   config.command=raw.command;config.args=[...raw.args];
  }else if(raw.transport==='streamable-http'){
   if(typeof raw.url!=='string'||raw.url.length>2000)fail('URL_INVALID');const u=new URL(raw.url);
@@ -36,7 +37,7 @@ export function createMcpManager({ownerCtx,agent,bindingId,isOwner,confirmChange
   const native=await(loadNative?loadNative():import(pathToFileURL(path.join(nativePackageRoot,'dsh-mcp-client/lib/index.js')).href));
   await auth(exec);
   let resolve,reject;const ready=new Promise((a,b)=>{resolve=a;reject=b});
-  const fork=ownerCtx.plugin({name:'owner-mcp-'+config.serverName,inject:native.inject,Config:native.Config,async apply(inner,resolved){try{await native.apply(inner,resolved);resolve();}catch{reject(Error('MCP_START_FAILED'));throw Error('MCP_START_FAILED');}}},{...config,failOnStartupError:true,toolCallTimeoutMs:30000,maxInstructionBytes:16384,reconnect:{enabled:false,initialDelayMs:500,maxDelayMs:30000,maxAttempts:1}});
+  exec.beforeEffect?.();const fork=ownerCtx.plugin({name:'owner-mcp-'+config.serverName,inject:native.inject,Config:native.Config,async apply(inner,resolved){try{await native.apply(inner,resolved);resolve();}catch{reject(Error('MCP_START_FAILED'));throw Error('MCP_START_FAILED');}}},{...config,failOnStartupError:true,toolCallTimeoutMs:30000,maxInstructionBytes:16384,reconnect:{enabled:false,initialDelayMs:500,maxDelayMs:30000,maxAttempts:1}});
   let timer,abort;const stop=new Promise((_,r)=>{timer=setTimeout(()=>r(Error('MCP_START_TIMEOUT')),20000);abort=()=>r(Error('CANCELLED'));exec.signal?.addEventListener('abort',abort,{once:true});});
   try{await Promise.race([ready,stop]);await auth(exec);active.set(config.serverName,fork);return{status:'running',serverName:config.serverName,persistence:'config-saved; reconnect after host restart requires explicit start'};}
   catch(error){await fork.dispose();throw error;}finally{clearTimeout(timer);exec.signal?.removeEventListener('abort',abort);}
@@ -44,14 +45,14 @@ export function createMcpManager({ownerCtx,agent,bindingId,isOwner,confirmChange
  const api={
   acceptsToolName(name){return [...active.keys()].some(id=>name.startsWith('mcp__'+id+'__'));},
   async revoke(){revoked=true;revocation.abort();for(const fork of active.values())await fork.dispose();active.clear();},
-  invoke(action,args={},exec={}){exec={...exec,signal:exec.signal?AbortSignal.any([exec.signal,revocation.signal]):revocation.signal};const job=chain.then(async()=>{await auth(exec);const servers=store.read();
+  invoke(action,args={},exec={}){exec={...exec,signal:exec.signal?AbortSignal.any([exec.signal,revocation.signal]):revocation.signal};if(action==='list')return(async()=>{await auth(exec);return Object.values(store.read()).map(c=>({serverName:c.serverName,transport:c.transport,status:active.has(c.serverName)?'running':'configured'}));})();const job=chain.then(async()=>{await auth(exec);const servers=store.read();
    if(action==='list')return Object.values(servers).map(c=>({serverName:c.serverName,transport:c.transport,status:active.has(c.serverName)?'running':'configured'}));
-   if(action==='add'){if(typeof args.configJson!=='string'||args.configJson.length>20000)fail('CONFIG_SIZE_INVALID');const config=validateServer(JSON.parse(args.configJson));if(Object.hasOwn(servers,config.serverName))fail('SERVER_ALREADY_CONFIGURED');await approve(args.start===true?'add-and-start':'add',config);await auth(exec);servers[config.serverName]=config;store.write(servers);return args.start===true?mount(config,exec):{status:'configured',serverName:config.serverName};}
+   if(action==='add'){if(typeof args.configJson!=='string'||args.configJson.length>20000)fail('CONFIG_SIZE_INVALID');const config=validateServer(JSON.parse(args.configJson));if(Object.hasOwn(servers,config.serverName))fail('SERVER_ALREADY_CONFIGURED');await approve(args.start===true?'add-and-start':'add',config);await auth(exec);exec.beforeEffect?.();servers[config.serverName]=config;store.write(servers);return args.start===true?mount(config,exec):{status:'configured',serverName:config.serverName};}
    if(!Object.hasOwn(servers,args.serverName))fail('SERVER_UNKNOWN');
    if(action==='start'){const config=validateServer(servers[args.serverName]);await approve('start',config);await auth(exec);return mount(config,exec);}
-   if(action==='stop'){const fork=active.get(args.serverName);if(fork){await fork.dispose();active.delete(args.serverName);}return{status:'stopped'};}
+   if(action==='stop'){const fork=active.get(args.serverName);if(fork){exec.beforeEffect?.();await fork.dispose();active.delete(args.serverName);}return{status:'stopped'};}
    fail('ACTION_DENIED');});chain=job.catch(()=>{});return job;},
-  register(ctx,defineTool){ctx.tools.register(defineTool({name:'owner_mcp',description:'主人MCP配置列表、明确添加并启动、启动和停止。新执行或连接须宿主具体批准，工具仅进入主人Agent作用域。',parameters:{action:{type:'string',required:true,description:'list/add/start/stop'},configJson:{type:'string',description:'不含密钥的精确stdio或streamable-http配置JSON'},serverName:{type:'string'},start:{type:'boolean'}},output:{schema:{type:'json'},render:(_a,r)=>[{type:'text',text:JSON.stringify(r)}]},execute:(a,e)=>api.invoke(a.action,a,e)}));}
+  register(ctx,defineTool){ctx.tools.register(defineTool({name:'owner_mcp',description:'主人MCP配置列表、明确添加并启动、启动和停止。新执行或连接须宿主具体批准，工具仅进入主人Agent作用域。',parameters:{action:{type:'string',required:true,description:'list/add/start/stop/status'},configJson:{type:'string',description:'不含密钥的精确stdio或streamable-http配置JSON'},serverName:{type:'string'},start:{type:'boolean'}},output:{schema:{type:'json'},render:(_a,r)=>[{type:'text',text:JSON.stringify(r)}]},execute:(a,e)=>api.invoke(a.action,a,e)}));}
  };
  ownerCtx.effect(()=>()=>api.revoke());
  return api;

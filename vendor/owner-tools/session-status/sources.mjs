@@ -30,8 +30,10 @@ export function createCoreSessionSource(core,{clock=Date.now,longTaskRoot=null,e
     }
    }
   }
+  const managementSource=core.capabilities?.ownerManagementStatusRows;if(managementSource!==undefined&&typeof managementSource!=='function')throw Error('MANAGEMENT_STATUS_SOURCE_INVALID');
+  const managementRows=managementSource?managementSource():[];if(!Array.isArray(managementRows)||managementRows.length>8)throw Error('MANAGEMENT_STATUS_REGISTRY_INVALID');
   const extra=extraManagedSessions?extraManagedSessions():[];if(!Array.isArray(extra))throw Error('EXTRA_REGISTRY_INVALID');
-  for(const row of [...isolatedRows,...extra]){if(!core.chats.has(row.chatId))throw Error('EXTRA_SESSION_NOT_BOUND');const index=rows.findIndex(v=>v.kind===row.kind&&v.id===row.id&&v.chatId===row.chatId);if(index>=0)rows[index]={...rows[index],...row};else rows.push(row);}
-  return{rows,coverage:{chatRegistry:true,legacyNativeTasks:true,longTaskRootConfigured:!!longTaskRoot,extraRegistryConfigured:!!extraManagedSessions||!!isolatedSource,isolatedTaskRegistry:!!isolatedSource,longTaskFileScanSuppressed:!!longTaskRoot&&!!isolatedSource,legacyTaskRows:legacyTasks,longTaskRows:longTasks,scopeLimit:'No global Harness, Codex or WeChat contact enumeration. Long-task live handles require explicit extra registry attachment.'}};
+  for(const row of [...isolatedRows,...managementRows.map(row=>({...row,paused:!!data.paused||row.paused===true})),...extra]){if(!core.chats.has(row.chatId))throw Error('EXTRA_SESSION_NOT_BOUND');const index=rows.findIndex(v=>v.kind===row.kind&&v.id===row.id&&v.chatId===row.chatId);if(index>=0)rows[index]={...rows[index],...row};else rows.push(row);}
+  return{rows,coverage:{chatRegistry:true,legacyNativeTasks:true,longTaskRootConfigured:!!longTaskRoot,extraRegistryConfigured:!!extraManagedSessions||!!isolatedSource,isolatedTaskRegistry:!!isolatedSource,managementJobRegistry:!!managementSource,longTaskFileScanSuppressed:!!longTaskRoot&&!!isolatedSource,legacyTaskRows:legacyTasks,longTaskRows:longTasks,scopeLimit:'No global Harness, Codex or WeChat contact enumeration. Long-task live handles require explicit extra registry attachment.'}};
  };
 }

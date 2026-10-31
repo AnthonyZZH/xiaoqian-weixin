@@ -1,3 +1,4 @@
+import {approvalRegistryPlan} from './registry-plan.mjs';
 import {pluginListDto,optionalJson} from './lossless-data.mjs';
 import {randomUUID} from 'node:crypto';
 const pkg=/^(@[a-z0-9-]+\/[a-z0-9._-]+|[a-z0-9][a-z0-9._-]*)(@[0-9][a-zA-Z0-9.+-]*)?$/;
@@ -16,9 +17,14 @@ export function createPluginManager({ctx,isOwner,confirmChange}){
  const rows=await m.listBundles();const name=args.spec.replace(/@[0-9][^@]*$/,'');const found=rows.find(x=>x.name===name&&x.availability!=='missing');
  if(found)return optionalJson({status:'already_installed',name:found.name,version:found.version,enabled:found.enabled});
  const inspection=await m.inspect(args.spec,undefined,exec.signal);if(inspection.problem)throw Error('INSPECTION_REJECTED');
- const requestId=await approve('install',{spec:args.spec,inspection,hostCodeExecution:true,newCredentials:false,approvedBuilds:[]});await auth(exec);
- return m.installBundle(args.spec,{requestId,saveExact:true});}
- if(action==='enable'){const rows=await m.listPlugins();const row=rows.find(x=>x.entryId===args.entryId);if(!row)throw Error('PLUGIN_NOT_INSTALLED');await approve('enable',{entryId:row.entryId,moduleName:row.moduleName,hostCodeExecution:true});await auth(exec);return m.setPluginEnabled(row.entryId,true);}
+ if(typeof inspection.version!=='string'||args.spec.slice(args.spec.lastIndexOf('@')+1)!==inspection.version)throw Error('INSPECTION_EXACT_VERSION_REQUIRED');
+ const sourcePlan=approvalRegistryPlan(inspection.registry,await m.registries());
+ const requestId=await approve('install',{spec:args.spec,inspection,sourcePlan,hostCodeExecution:true,newCredentials:false,approvedBuilds:[]});await auth(exec);
+ if(JSON.stringify(approvalRegistryPlan(inspection.registry,await m.registries()))!==JSON.stringify(sourcePlan))throw Error('REGISTRY_PLAN_CHANGED_REQUIRES_CONFIRMATION');
+ if(exec.signal?.aborted)throw Error('CANCELLED');exec.beforeEffect?.();
+ const abort=()=>{if(typeof m.cancelInstall==='function')void Promise.resolve(m.cancelInstall(requestId)).catch(()=>{});};exec.signal?.addEventListener('abort',abort,{once:true});
+ try{return await m.installBundle(args.spec,{requestId,saveExact:true,registry:inspection.registry});}finally{exec.signal?.removeEventListener('abort',abort);}}
+ if(action==='enable'){const rows=await m.listPlugins();const row=rows.find(x=>x.entryId===args.entryId);if(!row)throw Error('PLUGIN_NOT_INSTALLED');await approve('enable',{entryId:row.entryId,moduleName:row.moduleName,hostCodeExecution:true});await auth(exec);exec.beforeEffect?.();return m.setPluginEnabled(row.entryId,true);}
  throw Error('ACTION_DENIED');
- },register(agentCtx,defineTool){const bound=this;agentCtx.tools.register(defineTool({name:'owner_plugins',description:'主人插件发现、检查、具体安装和启用。新变更使用宿主具体批准，不提升全局权限。',parameters:{action:{type:'string',required:true,description:'list/indexes/search/inspect/install/enable'},spec:{type:'string'},query:{type:'string'},indexUrl:{type:'string'},entryId:{type:'string'}},output:{schema:{type:'json'},render:(_a,r)=>[{type:'text',text:JSON.stringify(r)}]},execute:(a,e)=>bound.invoke(a.action,a,e)}));}};}};
+ },register(agentCtx,defineTool){const bound=this;agentCtx.tools.register(defineTool({name:'owner_plugins',description:'主人插件发现、检查、具体安装和启用。新变更使用宿主具体批准，不提升全局权限。',parameters:{action:{type:'string',required:true,description:'list/indexes/search/inspect/install/enable/status'},spec:{type:'string'},query:{type:'string'},indexUrl:{type:'string'},entryId:{type:'string'}},output:{schema:{type:'json'},render:(_a,r)=>[{type:'text',text:JSON.stringify(r)}]},execute:(a,e)=>bound.invoke(a.action,a,e)}));}};}};
 }

@@ -46,6 +46,8 @@ def write_owned(adapter, edit, text):
     # Partial/failed writes are not owned: never delete guessed substrings.
     if token is not None and adapter.input_value(edit)==text:
         tx.owned=(edit,token,adapter.target,adapter.mode,adapter.hwnd,text)
+        journal=getattr(adapter,'_draft_journal',None)
+        if journal is not None:journal.written(adapter,edit,text)
 
 def check_owned_before_click(adapter):
     tx=getattr(adapter,'_boundary_tx',None)
@@ -112,9 +114,13 @@ def mark_click(adapter):
     if tx is None: raise SendNotAttempted('missing_send_transaction')
     # Set immediately before invoking the irreversible UI click, not on press_send entry.
     tx.attempted=True
+    journal=getattr(adapter,'_draft_journal',None)
+    if journal is not None:journal.phase(adapter,'click_started')
 
 def mark_confirmed(adapter):
     adapter._boundary_tx.confirmed=True
+    journal=getattr(adapter,'_draft_journal',None)
+    if journal is not None:journal.phase(adapter,'confirmed')
 
 def text_evidence(item, controls, preview):
     """Only row/body TextPattern evidence can establish accessible completeness.

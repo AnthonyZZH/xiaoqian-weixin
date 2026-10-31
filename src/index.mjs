@@ -114,6 +114,7 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
        }));
      }
    }});
+ core.capabilities.consumeOwnerApproval=input=>ownerIntegrations?.consumeOwnerApproval?.(input);
  const originalClose=core.close.bind(core);let closing;core.close=()=>closing??=(async()=>{billingCollector?.close();ownerSupplements.close();ownerRotation?.close();await ownerIntegrations?.close();return originalClose();})();
  return {core,driver:ui,media,features,evidenceMemory,initiative,importer,taskManager,ownerSupplements,ownerRotation,ownerIntegrations,billingCollector};
 }

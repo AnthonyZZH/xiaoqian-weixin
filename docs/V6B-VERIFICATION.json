@@ -1,0 +1,21 @@
+{
+  "baseline": "2cb8370ee9581498fbc2c3c21e724de4017c39c2",
+  "scope": "source/tests/docs only; no deployment data",
+  "sensitiveScan": {
+    "files": 247,
+    "findings": 0,
+    "unicodeAndHexEscapesDecoded": true
+  },
+  "verification": {
+    "pythonCompatibilityTests": 34,
+    "nodeLocalTests": 29,
+    "realRc4OfflineTests": 11,
+    "paidModelCalls": 0,
+    "wechatTestSends": 0
+  },
+  "limitations": [
+    "Synthetic Python fixtures emit unclosed SQLite ResourceWarnings; assertions pass.",
+    "No full runtime backup or real attachment download acceptance.",
+    "No public push authorized for this candidate."
+  ]
+}

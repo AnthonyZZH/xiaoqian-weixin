@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 
 from .backends import FakeBackend, RealBackend
+from .draft_journal import DraftJournal
 from .owner_edge_controller import configure as configure_owner_edge
 from .lease import DesktopLease
 from .protocol import Chat, DriverConfig, DriverError, NotSent, SendUnknown, VERSION, decode, encode, MAX_LINE
@@ -88,6 +89,7 @@ def serve():
                             # Fixed per-user/session desktop lease shared by all state directories.
                             lease = DesktopLease()
                             backend = RealBackend(config.adapter_root)
+                            backend._draft_journal=DraftJournal(Path(args["audit_path"]).parent/"draft-ownership",Path(args["audit_path"]).parent/"driver.sqlite3")
                             if args.get("owner_edge"):configure_owner_edge(backend,args["owner_edge"],config.allowed_chats,config.owner_edge_chat)
                         else:
                             backend = FakeBackend(config.fake_options, args["generation"], args["audit_path"])
@@ -125,7 +127,9 @@ def serve():
                                     raise NotSent("invalid_send_text")
                                 if not isinstance(at, list) or len(at) > 20 or any(not isinstance(name, str) or not name or len(name) > 128 for name in at):
                                     raise NotSent("invalid_mentions")
-                                result = backend.send(chat, text, at, config.max_chars)
+                                backend._draft_operation_id=args.get("operation_id")
+                                try:result = backend.send(chat, text, at, config.max_chars)
+                                finally:backend._draft_operation_id=None
                         else:
                             raise DriverError("unknown_command")
                 response = {"v": VERSION, "id": request_id, "ok": True, "result": result}

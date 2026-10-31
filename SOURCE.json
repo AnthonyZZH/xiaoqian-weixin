@@ -8,7 +8,13 @@
     "lossless-native-plugin-list",
     "independent-registry-scope-notes",
     "owner-request-attested-host-powershell",
-    "owner-shell-acceptance-race"
+    "owner-shell-acceptance-race",
+    "single-owner-group-policy-v6b",
+    "forward-observation-continuity",
+    "persistent-owned-draft-journal",
+    "obsolete-read-diagnostics-removed",
+    "owner-approval-and-management-jobs",
+    "empty-legacy-task-submission-hidden"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -16,8 +22,8 @@
     "runtimeDataIncluded": false,
     "historyReplay": false,
     "exportDifferences": [
-      "explicit trusted owner configuration replaces deployment-only name pin",
-      "incident diagnostics and draft-clearing hook excluded"
+      "explicit trusted owner configuration replaces deployment-only name pins",
+      "incident-only UI read diagnostics excluded; persistent draft ownership journal retained"
     ]
   },
   "ownerShellOrigin": {
@@ -26,7 +32,11 @@
     "runtimeDataIncluded": false,
     "defaultEnabled": false
   },
-  "deployedEquivalentCoreCommit": "91cf93a3098e579650b7f084830be920b07639f1",
-  "runtimeRelease": "cache-status-runtime-2026-10-30",
-  "deployedSourceManifest": "docs/CACHE-STATUS-SOURCE-MANIFEST.json"
+  "deployedEquivalentCoreCommit": null,
+  "runtimeRelease": "v6b-source-closeout-candidate",
+  "deployedSourceManifest": "docs/CACHE-STATUS-SOURCE-MANIFEST.json",
+  "previousPublicCommit": "2cb8370ee9581498fbc2c3c21e724de4017c39c2",
+  "candidateIsWholeReleaseDeployment": false,
+  "privateDataIncluded": false,
+  "acceptanceNotes": "docs/V6B-CLOSEOUT.md"
 }

@@ -9,7 +9,7 @@ function fixture(t,{pending=false}={}){
  const hostCtx={inject(){}};
  const management=createOwnerNativeManagement({hostCtx,isCurrentOwner:({agent:a,bindingId:b})=>valid&&a===agent&&b===bindingId,stateDir:root,python:'synthetic-python',marketFactory:options=>{events.push({kind:'construct',options});return cache;}});
  management.register({ctx,agent,bindingId,chatId:'owner',defineTool:x=>x});
- t.after(()=>{management.close();fs.rmSync(root,{recursive:true,force:true});});
+ t.after(async()=>{await management.close();fs.rmSync(root,{recursive:true,force:true});});
  return{management,agent,bindingId,tools,events,revoke(){valid=false;},release(v){release(v);},invoke:(args,who=agent)=>tools.get('owner_plugins').execute(args,{agent:who,callId:'synthetic',signal:AbortSignal.timeout(2000)})};
 }
 
@@ -27,9 +27,9 @@ test('foreign/group Agent is refused before cache; revoked owner cannot receive 
  const p=f.invoke({action:'search',query:'synthetic'});await new Promise(resolve=>setImmediate(resolve));f.revoke();f.release({ok:true,items:[]});await assert.rejects(p,/OWNER_ONLY/);
 });
 
-test('existing mutation approval is not replaced and cache closes with component',async t=>{
+test('approval transport remains separate from cache and cache closes with component',async t=>{
  const f=fixture(t);assert.deepEqual(f.management.available(),['owner_plugins','owner_mcp']);
- assert.equal(f.management.consumeOwnerApproval,undefined);
+ assert.equal(typeof f.management.consumeOwnerApproval,'function');
  const mcp=f.tools.get('owner_mcp');assert.ok(mcp);assert.equal(f.events.filter(x=>x.kind==='search').length,0);
- f.management.close();assert.ok(f.events.some(x=>x.kind==='close'));
+ await f.management.close();assert.ok(f.events.some(x=>x.kind==='close'));
 });
