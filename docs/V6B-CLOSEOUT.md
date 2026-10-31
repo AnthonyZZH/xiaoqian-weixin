@@ -27,3 +27,7 @@ Automatic economic rotation remains disabled in this public default. Wake usage 
 ## Data backup
 
 Privately inventory `stateDir` (bridge/driver/schedule/session-related state), the Harness home session store, persona, original-byte media, and the main Library vault/database. Record relative file names, sizes and SHA256 in a private manifest. SQLite snapshots require a consistent backup method; copying a live database alone is not a complete backup. Keep credentials and login state out of public bundles. Test restore into a separate directory before relying on a backup. No full-runtime backup success is claimed by this release.
+
+## Single-selection followup
+
+The compatibility read path reuses its selected adapter across owned-draft recovery and authenticated edge reading. It still revalidates the exact adapter/chat and preserves all budgets and signed receipts. Nine isolated fake-UI cases verify the baseline two selections versus one selection and failure boundaries. Successful INGEST timestamps are not poll-attempt heartbeats; no live latency improvement or elimination of long successful-record gaps is claimed.

@@ -23,10 +23,12 @@ def verify(client,receipt,chat,rows):
     if not isinstance(signature,str) or not hmac.compare_digest(signature,expected):return None
     if proof.get('chat_key')!=chat.key or proof.get('page_digest')!=hashlib.sha256(encoded(rows)).hexdigest():return None
     return proof
-def read_latest(backend,chat):
+def read_latest(backend,chat,*,selected=None):
     # Runs inside the SAME worker/desktop lease/serial UI lane, never another controller.
     import uiautomation as auto
-    adapter=backend._select(chat)
+    adapter=backend._select(chat) if selected is None else selected
+    if selected is not None and (selected is not backend.adapter or backend.chat!=chat):
+        raise DriverError('owner_edge_selection_mismatch')
     module=backend.module
     edit=adapter.validate();draft=adapter.input_value(edit)
     listing=adapter.window.ListControl(AutomationId='chat_message_list')

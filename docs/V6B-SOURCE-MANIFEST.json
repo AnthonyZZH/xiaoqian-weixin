@@ -6,12 +6,12 @@
     "README.md": "ac15ac8ebf56761d592ce95bb5e4dcec48df0c09c4a7cc68f65a6802b7fb0c0f",
     "SOURCE.json": "4f9d4ca4e1d0f960aa431939379d9b1629701c518f4519a0d639a34f29642097",
     "compat/adapter/wechat_boundary.py": "937f0e33b9323a6a6f746c58873766d096278036db7f86a3d71a51cb8d59e246",
-    "compat/vendor/xiaoqian_driver/backends.py": "b0a27f798f71dc492a69399d8f5be41e11d18912a3eb130298b5efa02ad18daf",
+    "compat/vendor/xiaoqian_driver/backends.py": "8ac772f7da12071cd5f062df8caddb289b2cc9b922878ce8087f896900a462d7",
     "compat/vendor/xiaoqian_driver/client.py": "ebe7aa2cad66452141f9d8023f039e7c4101ba61ab1390af119a2330c0b40abc",
     "compat/vendor/xiaoqian_driver/draft_journal.py": "0147439d91614a06d6d9687df3ab5cac30c0e16fa0a4829dc1b06ebb23657274",
     "compat/vendor/xiaoqian_driver/snapshot_identity.py": "ec2ab7b08b5fd42ba9249bd1e270c5a335b2d7b9489bc91a14f166b2047195d3",
     "compat/vendor/xiaoqian_driver/worker.py": "3d50c7004fe699606733ba92b48973d973982f71258da86941f9fec550c148ba",
-    "docs/V6B-CLOSEOUT.md": "d69ba0561c75c54ad803053051627284622b05ccefe511238b8844d3009ad042",
+    "docs/V6B-CLOSEOUT.md": "14f688143d4f399ccabed18e04be8aa717fcb37054646f448a839b905f826b15",
     "docs/V6B-VERIFICATION.json": "98d7ac489b20c10fa577cc8fb0b48401718b81139211d7a5f94e241861a24fee",
     "src/core.mjs": "3cc461424ed2aab3516af1a975c5a65648bbf56ff3470e7df615f49bf462818d",
     "src/index.mjs": "d4cf7a68d60ab7a02b08b334d3cdd319f6b1796c963c10ff30058fdffb552c23",
@@ -43,6 +43,8 @@
     "vendor/owner-tools/plugin-management/registry-plan.mjs": "bc8f606357547692613cc48d13375ff6fa789b4fba25b00a93b5460b1ec8019a",
     "vendor/owner-tools/plugin-management/wechat-approval.mjs": "a28c3c73cf4a8c248db29b9b217ae0d18a977d13bf5b226696187d401a4b708e",
     "vendor/owner-tools/session-status/index.mjs": "cd65825d6b28b251e77810473f29a95a6ecc47d1131dc2edb383ee096a995a2c",
-    "vendor/owner-tools/session-status/sources.mjs": "8e7efb370fd1bf042be1779fd76144adbb740cd4bdd1d826eb9f70a217464152"
-  }
+    "vendor/owner-tools/session-status/sources.mjs": "8e7efb370fd1bf042be1779fd76144adbb740cd4bdd1d826eb9f70a217464152",
+    "compat/vendor/xiaoqian_driver/owner_edge_controller.py": "27ff7dd9719476d4f224774803108a6e15237e23ddd3ff18cdd79c3e7137065a"
+  },
+  "followupBase": "3113900c60095c8c640f4f5c621bceba2c68a8c1"
 }

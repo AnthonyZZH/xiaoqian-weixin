@@ -138,14 +138,19 @@ class RealBackend:
 
     def read(self, chat: Chat):
         journal=getattr(self,'_draft_journal',None)
+        selected=None
         if journal is not None:
-            adapter=self._select(chat)
-            journal.recover(adapter,chat.key)
+            selected=self._select(chat)
+            journal.recover(selected,chat.key)
         self.last_controller_receipt=None
         if chat in getattr(self,'_edge_chats',()):
             from .owner_edge_controller import read_latest
-            return read_latest(self,chat)
-        adapter = self._select(chat)
+            return read_latest(self,chat,selected=selected)
+        adapter = selected if selected is not None else self._select(chat)
+        if selected is not None:
+            if selected is not self.adapter or self.chat!=chat:
+                raise DriverError('read_selection_mismatch')
+            adapter.validate()
         rows = adapter.read()
         self.rows = {row.key: row for row in rows}
         return [{"key": row.key, "text": row.text, "role": row.role,
