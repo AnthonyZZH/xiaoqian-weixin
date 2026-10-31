@@ -37,6 +37,23 @@ class _Job:
     worker_exit_code: int | None = None
 
 
+
+def worker_argv():
+    """Bypass Windows venv redirector; Popen must own the actual UI worker PID.
+
+    -S then addsitedir preserves exactly this existing environment's site paths;
+    no global package install, credential, account or permission is introduced.
+    """
+    if os.name != "nt":
+        return [sys.executable, "-B", "-u", "-m", "xiaoqian_driver.worker"]
+    import site,json
+    executable = getattr(sys, "_base_executable", None)
+    if not executable or not Path(executable).is_file():
+        raise DriverError("worker_start_failed")
+    paths = [p for p in site.getsitepackages() if Path(p).is_dir()]
+    bootstrap = "import json,runpy,site,sys;[site.addsitedir(p) for p in json.loads(sys.argv[1])];runpy.run_module('xiaoqian_driver.worker',run_name='__main__')"
+    return [executable, "-B", "-u", "-S", "-c", bootstrap, json.dumps(paths)]
+
 class DriverClient:
     """One client per durable state directory. All UI commands are serialized."""
 
@@ -171,12 +188,20 @@ class DriverClient:
             events.put(("eof", None))
 
     def _ensure_worker(self, deadline: float):
+        # Admission is outside initialization cleanup: do not re-kill a live
+        # quarantined worker on each poll. Reap only the original Popen handle.
+        with self._process_lock:
+            if self._closing.is_set():
+                raise DriverError("client_closed")
+            if self._quarantined:
+                if self._process is None or self._process.poll() is None:
+                    raise DriverError("worker_stop_unconfirmed")
+                self._stop_worker()
         try:
             with self._process_lock:
                 if self._closing.is_set():
                     raise DriverError("client_closed")
-                if self._quarantined:
-                    raise DriverError("worker_stop_unconfirmed")
+
                 if self._process is not None:
                     if self._process.poll() is None and getattr(self, "_worker_ready", False):
                         return
@@ -187,7 +212,7 @@ class DriverClient:
                 env.update(PYTHONIOENCODING="utf-8", PYTHONDONTWRITEBYTECODE="1")
                 try:
                     process = subprocess.Popen(
-                        [sys.executable, "-B", "-u", "-m", "xiaoqian_driver.worker"],
+                        worker_argv(),
                         cwd=str(Path(__file__).resolve().parent.parent), env=env,
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                         text=True, encoding="utf-8", bufsize=1, close_fds=True,
@@ -202,6 +227,8 @@ class DriverClient:
             owner_edge=client_options(self)
             result = self._request("hello", {"config": asdict(self.config), "generation": self._generation, "owner_edge":owner_edge,
                                             "audit_path": str(self.state_dir / "fake-events.jsonl")}, hello_deadline)
+            if result.get("pid") != process.pid:
+                raise DriverError("worker_identity_mismatch")
             if result.get("protocol") != VERSION or result.get("mode") != self.config.mode:
                 raise DriverError("handshake_mismatch")
             with self._process_lock:
@@ -289,6 +316,7 @@ class DriverClient:
                     except (OSError, ValueError):
                         pass
             self._process, self._events = None, None
+            self._quarantined = False  # process exit and stream cleanup confirmed
 
     def _send(self, job: _Job) -> SendResult:
         operation_id = job.args["operation_id"]

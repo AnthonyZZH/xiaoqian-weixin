@@ -46,8 +46,8 @@ def read_latest(backend,chat,*,selected=None):
     if not inside or module.foreground()!=adapter.hwnd:raise DriverError('owner_edge_focus_unverified')
     with phase(backend,'edge_navigation_validate'):
         adapter.validate();auto.SendKeys('{Ctrl}{End}',waitTime=.1)
-        adapter.validate()
     with phase(backend,'adapter_read'):
+        # read() itself begins with fresh validate(), with no UI operation between.
         rows=adapter.read()
     with phase(backend,'edge_final_validate'):
         if adapter.input_value(edit)!=draft:raise DriverError('owner_edge_draft_changed')

@@ -121,6 +121,7 @@ class RealBackend:
             with phase(self,"adapter_construct"):
                 adapter = module.WeChatAdapter(chat.name, mode=chat.mode)
             self.module, self.adapter = module, adapter
+            adapter._read_phases = getattr(self, "_read_phases", None)
         if self.chat != chat:
             self.adapter.set_target(chat.name, chat.mode)
             self.chat = chat

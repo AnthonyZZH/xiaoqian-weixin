@@ -195,12 +195,70 @@ class WeChatAdapter:
                 if top and top != hwnd and window_pid(top) != own and class_name(top) not in SHELL_CLASSES:
                     _user32.ShowWindow(top, 6)  # SW_MINIMIZE
 
+    def _native_exact_control(self, kind, property_name, expected):
+        """Same fresh window/descendant predicate, evaluated by UIAutomation.
+
+        No cached element, type result, shortened search depth or recipient hint.
+        Unsupported providers retain the original library lookup.
+        """
+        try:
+            from uiautomation.uiautomation import _AutomationClient
+            holder = _AutomationClient.instance()
+            client = holder.IUIAutomation
+            by_type = client.CreatePropertyCondition(auto.PropertyId.ControlTypeProperty, getattr(auto.ControlType, kind))
+            by_value = client.CreatePropertyCondition(getattr(auto.PropertyId, property_name + "Property"), expected)
+            condition = client.CreateAndCondition(by_type, by_value)
+            element = self.window.Element.FindFirst(holder.UIAutomationCore.TreeScope_Descendants, condition)
+            control = auto.Control.CreateControlFromElement(element) if element else None
+            if control is not None and (control.ControlTypeName != kind or getattr(control, property_name) != expected):
+                return False, None
+            recorder = getattr(self, "_read_phases", None)
+            if recorder is not None:
+                recorder.emit("native_exact_" + kind, "matched" if control is not None else "absent")
+            return True, control
+        except Exception:
+            return False, None
+
+
+    def _native_title_control(self):
+        try:
+            from uiautomation.uiautomation import _AutomationClient
+            holder = _AutomationClient.instance()
+            condition = holder.IUIAutomation.CreatePropertyCondition(auto.PropertyId.ControlTypeProperty, auto.ControlType.TextControl)
+            elements = self.window.Element.FindAll(holder.UIAutomationCore.TreeScope_Descendants, condition)
+            if elements.Length > 10000:
+                return False, None
+            matches = []
+            for index in range(elements.Length):
+                element = elements.GetElement(index)
+                if re.match(r".*big_title_line_h_view$", element.CurrentAutomationId or ""):
+                    matches.append(element)
+                    if len(matches) > 1:
+                        return False, None  # Preserve existing ordering on ambiguity.
+            if not matches:
+                return True, None
+            control = auto.Control.CreateControlFromElement(matches[0])
+            if control.ControlTypeName != "TextControl" or not re.match(r".*big_title_line_h_view$", control.AutomationId or ""):
+                return False, None
+            recorder = getattr(self, "_read_phases", None)
+            if recorder is not None:
+                recorder.emit("native_title_lookup", "matched")
+            return True, control
+        except Exception:
+            return False, None
+
+
     def current_title(self):
         """Read the live title; does not certify private/group mode."""
         self.check_window()
-        title = self.window.TextControl(RegexAutomationId=r".*big_title_line_h_view$")
-        if not title.Exists(0.3):
+        native, title = self._native_title_control()
+        if not native:
+            title = self.window.TextControl(RegexAutomationId=r".*big_title_line_h_view$")
+            if not title.Exists(0.3):
+                return None
+        elif title is None:
             return None
+        self._live_title_control = title
         return chat_title(title.Name)
 
 
@@ -209,7 +267,30 @@ class WeChatAdapter:
         title = self.current_title()
         if title is None:
             return None, None
-        single = self.window.GroupControl(ClassName="mmui::ChatTitleBarChatSingleView").Exists(0)
+        if self.mode == "private":
+            # A fresh title was found under this validated window. Its live
+            # ancestor is a positive witness for the SAME existing private-header
+            # class; no cached mode or nickname inference is used.
+            try:
+                ancestor = self._live_title_control
+                for _ in range(8):
+                    ancestor = ancestor.GetParentControl()
+                    if ancestor is None:
+                        break
+                    if ancestor.ClassName == "mmui::ChatTitleBarChatSingleView":
+                        recorder = getattr(self, "_read_phases", None)
+                        if recorder is not None:
+                            recorder.emit("private_mode_live_ancestor", "matched")
+                        return title, True
+                    if ancestor.ControlTypeName == "WindowControl":
+                        break
+            except Exception:
+                pass  # Unknown/stale ancestry retains the original full lookup.
+        native, header = self._native_exact_control("GroupControl", "ClassName", "mmui::ChatTitleBarChatSingleView")
+        single = header is not None if native else self.window.GroupControl(ClassName="mmui::ChatTitleBarChatSingleView").Exists(0)
+        recorder = getattr(self, "_read_phases", None)
+        if recorder is not None:
+            recorder.emit("mode_legacy_lookup", "complete")
         return title, single
 
     def validate(self):
@@ -218,8 +299,10 @@ class WeChatAdapter:
             raise RuntimeError(f"当前打开的不是「{self.target}」，暂停收发")
         if single != (self.mode == "private"):
             raise RuntimeError(f"「{self.target}」的聊天类型和设置不符（私聊/群聊），暂停收发")
-        edit = self.window.EditControl(AutomationId="chat_input_field")
-        if not edit.Exists(0.3):
+        native, edit = self._native_exact_control("EditControl", "AutomationId", "chat_input_field")
+        if not native:
+            edit = self.window.EditControl(AutomationId="chat_input_field")
+        if (native and edit is None) or (not native and not edit.Exists(0.3)):
             raise RuntimeError("找不到输入框，暂停收发")
         return edit
 
@@ -303,7 +386,6 @@ class WeChatAdapter:
 
     def open_chat(self, name):
         """Click `name` in the conversation list and confirm the title changed."""
-        self.check_window()
         if self.current_title() == name:
             return
         item = self.window.ListItemControl(AutomationId="session_item_" + name, searchDepth=30)

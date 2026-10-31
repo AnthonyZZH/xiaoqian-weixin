@@ -16,7 +16,8 @@
     "owner-approval-and-management-jobs",
     "empty-legacy-task-submission-hidden",
     "read-terminal-outcome-evidence",
-    "read-stage-metadata-and-title-selection"
+    "read-stage-metadata-and-title-selection",
+    "native-ui-predicate-lookup-and-confirmed-worker-recovery"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -56,5 +57,13 @@
     "runtimeDataIncluded": false,
     "optionalMeasurementPortIncluded": false,
     "slowReadRootCauseFixed": false
+  },
+  "nativeReadRecovery": {
+    "sourceManifest": "docs/READ-NATIVE-SOURCE.json",
+    "runtimeDataIncluded": false,
+    "componentObserved": true,
+    "wholeSnapshotDeploymentClaimed": false,
+    "attachmentDownloadEnabled": false,
+    "meteringEnabled": false
   }
 }

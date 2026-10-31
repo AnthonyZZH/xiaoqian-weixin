@@ -15,7 +15,7 @@ class Window:
  def EditControl(self,**kw):return types.SimpleNamespace(Exists=lambda n:True)
 class Tests(unittest.TestCase):
  def instance(self):
-  a=methods()();a.window=Window();a.check_window=lambda:None;a.target='target';a.mode='private';return a
+  a=methods()();a.window=Window();a.check_window=lambda:None;a._native_title_control=lambda:(False,None);a._native_exact_control=lambda *args:(False,None);a.target='target';a.mode='private';return a
  def test_open_existing_does_not_scan_unused_mode(self):
   a=self.instance();a.open_chat('target');self.assertEqual(a.window.count,0)
   a.validate();self.assertEqual(a.window.count,1)
@@ -32,7 +32,7 @@ class Tests(unittest.TestCase):
   def rest(path):
    t=ast.parse(path.read_text(encoding='utf-8'))
    for n in ast.walk(t):
-    if isinstance(n,ast.ClassDef):n.body=[x for x in n.body if not(isinstance(x,ast.FunctionDef) and x.name in ('current_title','current','open_chat'))]
+    if isinstance(n,ast.ClassDef):n.body=[x for x in n.body if not(isinstance(x,ast.FunctionDef) and x.name in ('current_title','current','open_chat','validate','_native_exact_control','_native_title_control'))]
    return ast.dump(t,include_attributes=False)
   self.assertEqual(rest(R/'tests'/'fixtures'/'read-phase-adapter.before.py'),rest(D/'wechat_adapter.py'))
 if __name__=='__main__':unittest.main()

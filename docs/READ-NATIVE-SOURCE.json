@@ -1,0 +1,40 @@
+{
+  "publicBase": "626e314bc180d50fc952d3af04a0844685b2c68f",
+  "component": "read-native-and-worker-recovery/v1",
+  "installedFileSha256": {
+    "client.py": "e77e8ee0f9585f233e3b66f88751deb36fe75930772ba1afbe89bb4bf7ff1fae",
+    "backends.py": "c0d792cc139f476b74317ac9f32372659a4722acbf30149073935cc771fcaf79",
+    "worker.py": "d1a7b6bfe3f29d08226952eec0a05b55f02179896a5a17aa5938ec46aa268e86",
+    "owner_edge_controller.py": "b829e7aed507c371f3d395f67c104782b9935cfae5807a1504c88c28a23e5818",
+    "read_phases.py": "264d50e1c4037586c4cd25459b594c434061d755fc521679713da73def3c742e",
+    "wechat_adapter.py": "4104c547a85cfe20af94d9c89ea763a346896447265423378d5eeba987367714"
+  },
+  "publicFileSha256": {
+    "compat/vendor/xiaoqian_driver/client.py": "e77e8ee0f9585f233e3b66f88751deb36fe75930772ba1afbe89bb4bf7ff1fae",
+    "compat/vendor/xiaoqian_driver/backends.py": "6a497614f41837837261a85886a28e076d0ff35c32d9cc6cfe6b505b45be6239",
+    "compat/vendor/xiaoqian_driver/worker.py": "fd1f6e69deb82efbaff19523ee79f1e60aba23914b964e04005ae6a03685c42b",
+    "compat/vendor/xiaoqian_driver/owner_edge_controller.py": "30328f70d277ec7c758b46b28847a6d1a9d9110b45d6324ea9546c2b82fcbbd7",
+    "compat/vendor/xiaoqian_driver/read_phases.py": "264d50e1c4037586c4cd25459b594c434061d755fc521679713da73def3c742e",
+    "adapter/wechat_adapter.py": "2a8bb569e651ff94232c5f5f73f34bba6764c7207b87809766a72772fb1dfe80"
+  },
+  "publicCompatibilityDifferences": [
+    "adapter retains public text/attachment/send safeguards; only native lookup/title/type/selection methods imported",
+    "edge controller retains parameterized owner policy",
+    "worker retains parameterized owner and omits runtime-only raw-error hook",
+    "backends preserves public CRLF line endings; code matches fixed installed source"
+  ],
+  "liveObservation": {
+    "atUtc": "2026-10-31T21:28:44Z",
+    "successfulTerminalSample": 8,
+    "approximateSeconds": [
+      2.48,
+      3.0
+    ],
+    "hostRestarted": false,
+    "notPerformanceSla": true
+  },
+  "runtimeDataIncluded": false,
+  "temporaryMaintenanceHooksIncluded": false,
+  "attachmentDownloadEnabled": false,
+  "meteringEnabled": false
+}
