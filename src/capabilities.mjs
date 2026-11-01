@@ -73,7 +73,7 @@ export function createCapabilities({config={},media,generatedRoot,python='python
     await media.approve(row.media_id,{scope:chatId});
     return {status:'ready_to_send',mediaId:row.media_id,animated:false};
   };
-  if(config.vision?.enabled===true)result.describeImage=async({chatId,args,signal})=>{
+  if(config.vision?.enabled===true&&config.vision.inputMode!=='native_attachment')result.describeImage=async({chatId,args,signal})=>{
     if(!media?.previewForVision)throw new Error('VISION_MEDIA_UNAVAILABLE');
     if(typeof args.id!=='string'||!/^m_[0-9a-f]{32}$/.test(args.id))throw new Error('VISION_MEDIA_ID_INVALID');
     const preview=await media.previewForVision(chatId,args.id);

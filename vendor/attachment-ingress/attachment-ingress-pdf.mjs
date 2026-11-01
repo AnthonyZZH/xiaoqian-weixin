@@ -16,15 +16,15 @@ function safeRoot(root){
  check(fs.lstatSync(full).isDirectory()&&fs.realpathSync(full)===full,'ROOT_INVALID');return full;
 }
 export function identifyFileCard(evidence){
- // Shared class alone is not proof: links/red packets use this class too.
- if(evidence?.className!=='mmui::ChatBubbleItemView')return null;
- const names=[...(evidence.controls??[]).map(c=>c.name),evidence.name].filter(x=>typeof x==='string'&&x.length<=200);
+ // Native saved-file metadata, never a link/filename scraped from chat text.
+ if(evidence?.kind!=='native-saved-file')return null;
+ const names=[evidence.displayName].filter(x=>typeof x==='string'&&x.length<=200);
  const files=[...new Set(names.filter(x=>/^[^\\/:\0\r\n]+\.(txt|docx|pdf)$/iu.test(x)))];
  if(files.length!==1)return null;
  return {displayName:files[0],extension:path.extname(files[0]).toLowerCase(),status:'candidate_unverified',
   sourceMessageId:evidence.sourceMessageId,downloadVerified:false};
 }
-export function createAttachmentIngress({root,ownerBindingId,ownerChatId,createAttachmentRegistry,downloadBroker,isOwnerActive}={}){
+export function createAttachmentIngress({root,ownerBindingId,ownerChatId,createAttachmentRegistry,fileBroker,isOwnerActive}={}){
  check(typeof ownerBindingId==='string'&&ownerBindingId.length>0,'OWNER_BINDING_REQUIRED');
  check(typeof ownerChatId==='string'&&ownerChatId.length>0,'OWNER_CHAT_REQUIRED');
  check(typeof createAttachmentRegistry==='function','REGISTRY_REQUIRED');
@@ -53,7 +53,12 @@ export function createAttachmentIngress({root,ownerBindingId,ownerChatId,createA
   inspect(row);const item=registry.read(row.registryId,binding);
   check(sha(Buffer.from(item.base64,'base64'))===row.sha256,'ATTACHMENT_CHANGED');return item;
  }});
- return Object.freeze({attachments,
+ const registered=sourceMessageId=>{
+  const row=[...records.values()].find(r=>r.sourceMessageId===sourceMessageId);
+  return row?{attachmentId:row.id,displayName:row.displayName,sourceMessageId:row.sourceMessageId,bytes:row.bytes,sha256:row.sha256,status:'ready',trust:'untrusted_document_content'}:null;
+ };
+ return Object.freeze({attachments,registered,
+  registeredFiles(){return [...records.values()].map(r=>registered(r.sourceMessageId));},
   async receive(event,evidence){
    // Trusted host provenance; never pass a model-created event or owner flag.
    check(event?.authenticatedOwner===true&&event.ownerBindingId===ownerBindingId&&event.chatId===ownerChatId&&event.mode==='private'&&event.role==='user','OWNER_ATTACHMENT_REQUIRED');
@@ -63,10 +68,10 @@ export function createAttachmentIngress({root,ownerBindingId,ownerChatId,createA
    const prior=[...records.values()].find(r=>r.sourceMessageId===event.messageId);
    if(prior)return {attachmentId:prior.id,displayName:prior.displayName,sourceMessageId:prior.sourceMessageId,bytes:prior.bytes,status:'ready',cached:true};
    check(records.size<1000,'ATTACHMENT_RECORD_LIMIT');
-   check(downloadBroker&&typeof downloadBroker.acquire==='function','DOWNLOAD_UNAVAILABLE');
+   check(fileBroker&&typeof fileBroker.acquire==='function','SAVED_FILE_UNAVAILABLE');
    // Broker is a host capability. It must attest the selected message and return
    // bytes, not an arbitrary local path/URL from the card or document.
-   const receipt=await downloadBroker.acquire(Object.freeze({...card}),{maxBytes:MAX,ownerBindingId,ownerChatId});
+   const receipt=await fileBroker.acquire(Object.freeze({...card}),{maxBytes:MAX,ownerBindingId,ownerChatId});
    check(await isOwnerActive(event)===true,'OWNER_AUTHORITY_REVOKED');
    check(receipt?.verified===true&&receipt.sourceMessageId===event.messageId&&receipt.ownerBindingId===ownerBindingId&&receipt.chatId===ownerChatId,'DOWNLOAD_PROVENANCE_MISMATCH');
    check(Buffer.isBuffer(receipt.bytes)&&receipt.bytes.length<=MAX,'ATTACHMENT_SIZE_LIMIT');

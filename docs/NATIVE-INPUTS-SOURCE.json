@@ -1,0 +1,267 @@
+{
+  "revision": "r10-public-source-candidate",
+  "reviewedBase": "598c9f6dd63fd7bb80702dcee04c2a035145e853",
+  "inputBundleSHA256": "bda4d871a31ca8f77d66bd81e47b2af8a971120bcb208f157d706706eb70b1f5",
+  "privateRuntimeIncluded": false,
+  "privateOperationsIncluded": false,
+  "productionInstalledByThisCommit": false,
+  "automaticImagesEnabled": false,
+  "newFileAutoReceiveLiveAcceptancePassed": false,
+  "publicSafetyAdaptations": [
+    "preserved explicit owner_edge_chat and configured-group policy",
+    "removed deployment names and fixed runtime log path",
+    "excluded runtime prototype-adoption operations",
+    "included missing saved-file worker and bounded local PDF parser",
+    "retained shared owner registry and unknown quarantine"
+  ],
+  "validation": {
+    "node-targeted": {
+      "exitCode": 0,
+      "summary": [
+        "# tests 23",
+        "# pass 23",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    "python-native": {
+      "exitCode": 0,
+      "summary": [
+        "Ran 51 tests in 5.628s\r",
+        "OK\r"
+      ]
+    },
+    "public-owner-group": {
+      "exitCode": 0,
+      "summary": [
+        "PASS: configured private/group receipts, cross-chat denial, digest binding, unconfigured target rejection; no UI or model calls\r"
+      ]
+    },
+    "public-owner-recovery": {
+      "exitCode": 0,
+      "summary": [
+        "Ran 12 tests in 0.426s\r",
+        "OK\r"
+      ]
+    },
+    "diff-whitespace": {
+      "exitCode": 0,
+      "summary": []
+    },
+    "python-source-syntax": {
+      "exitCode": 0,
+      "summary": []
+    },
+    "syntax": "Changed JS modules and public Python sources passed",
+    "sourceScan": {
+      "files": 49,
+      "highSignalFindings": 0,
+      "forbiddenArtifacts": 0,
+      "relativeImportsMissing": 0
+    },
+    "notRun": {
+      "installedHarnessSDK": "Unavailable on laptop; existing core-turns-native test attempted and failed to load its configured SDK path, not counted as passed",
+      "remoteCI": "Not run",
+      "projectLintAndTypecheck": "No configured project linter/typecheck"
+    },
+    "environmentNotes": "Initial tests hit redirected OS-temp rename and a test venv without Pillow; final run uses workspace TEMP and the bundled Python site packages. pypdf is copied only into ignored local test venv; public runtime declares the dependency."
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "628fb9c8d15b95feb5ef87ab874be604ef59327839286d22f7a84139febd5498"
+    },
+    {
+      "path": "SOURCE.json",
+      "sha256": "2ac82388c4b8ddea61d3b3545f67474b127ecb186b60e50653f7e3265a400695"
+    },
+    {
+      "path": "compat/adapter/wechat_adapter.py",
+      "sha256": "ee4a5970c11be2d03bc8f5edfb4a44f7147e5c6aeec6f687c8e9245c34db57d4"
+    },
+    {
+      "path": "compat/driver/bridge_rpc.py",
+      "sha256": "aa0a8e115d62b97fe2bf5b8ccf18f5de028b505bf633fd1e3b8b712eb03fdf7d"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/backends.py",
+      "sha256": "b53bb8bd3e885b1b30204a7f318d16e8bb8beb7b0a4acb796d9d353820137fbd"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/client.py",
+      "sha256": "9ecdc1b31ec511d588ed7d6fff2560a4654048039189d0f29a19f12631b3dbfc"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/image_native.py",
+      "sha256": "314e17c4a832bc9ce33b6e462120f6bbeeff8e85a0ae52cd4fa6e6da560199ef"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/image_transport.py",
+      "sha256": "c317624571a643af7d8963ce5680ac771722ba914138b9616c04363070e57dea"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/native_image_surface.py",
+      "sha256": "b3fcd5622a324a8719b69b2fccaac719774a3196e247119cb7da1fe4039d653d"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/native_read_binding.py",
+      "sha256": "2326ab85e2c83ea91c5db9ab78342ad96457bc5026f16ee4ac79ae5debe95e7e"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/native_row_ref.py",
+      "sha256": "a32730c7298ce7675c80d273c1984810a3d3e5e6f2d08b65a9da3fcb23d664ed"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/native_saved_file_location.py",
+      "sha256": "73d9fb47934495d491dd713e04b58dbf08ef19d3e9d2e684175bc8f946c0d88c"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/owner_edge_controller.py",
+      "sha256": "161c19a733dbd86fab6d10ac2a988e6c200f659ffeb63ad0ef5da13b6cc141e3"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/protocol.py",
+      "sha256": "7012334331d3171506974b6bca4ad4aa5ad35f94be9e93dabc90fc6c5ef7b9c2"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/row_image_geometry.py",
+      "sha256": "5002dcaea3d333b69587fdd0cce0c60c3443a3a5c14f09ed52d165426360b3e9"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/saved_file_acquire.py",
+      "sha256": "d7b24d80dbd8f5249e56cede79ec93f40fade5347653b38b4302f99da8d1af7e"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/saved_file_identity.py",
+      "sha256": "c850b9c956423e10360f24986d4c17e8e4fd72441640ba0c0eebae74beddb5e7"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/saved_file_native.py",
+      "sha256": "6b1c9709b1749d5d9f3876531b97b8a073029ef386b929237e916ea0ef5e3a77"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/saved_file_surface.py",
+      "sha256": "f72f29655ade3cc201ebabfc445bf3af0ebef14d4ddcc9aa89b05c16abcdf3d8"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/saved_file_transition.py",
+      "sha256": "ec6b7fe951f59a602d2abc91b70932940babac06a491765323430e8e214b65a0"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/worker.py",
+      "sha256": "6fef2ad3589141786e240a4698568db1f23c9903f735e6773df3859f477e2caa"
+    },
+    {
+      "path": "cordis.patch.yml",
+      "sha256": "7ef87f69be4569d6993b94517ce5f2fcce52cdda718f00263ce6b57345d610b2"
+    },
+    {
+      "path": "docs/NATIVE-INPUTS.md",
+      "sha256": "3a2dcc2c19b0b8763cdaf0bd4c29bd8b9c5a454cb03c722e544ed287d52675b5"
+    },
+    {
+      "path": "driver/durable-client.mjs",
+      "sha256": "552ce2c6324e1719b2bcc72e3ca8a9e97bf035f12fb9bec49881e4e9e0406c14"
+    },
+    {
+      "path": "requirements-windows.txt",
+      "sha256": "d65e847b36208cc27fb67364f8ff514617ea81c3a174b15f22becc6e444bf009"
+    },
+    {
+      "path": "src/capabilities.mjs",
+      "sha256": "0eaec136f83bb9dc022bcbe695dc6945398c2c02a72a1403f1d9da1329d74fa3"
+    },
+    {
+      "path": "src/core.mjs",
+      "sha256": "57978c87e3aa6faf8181c04fdd1c39b20de294744758b45862365fce16062005"
+    },
+    {
+      "path": "src/driver-native-image-host.mjs",
+      "sha256": "746857aad1d3b8336c4b0bcedf5115196c6e246c062fd00d98458163bfcc56d0"
+    },
+    {
+      "path": "src/driver-saved-file-host.mjs",
+      "sha256": "b9d630fc5044d23ec3080767f69b97e50965867cd48ace11adadb5ce8b053a95"
+    },
+    {
+      "path": "src/index.mjs",
+      "sha256": "c90980b4300c86bea059212addc7d57dc331bccce98a039c1c4e90f410a11416"
+    },
+    {
+      "path": "src/native-image-input.mjs",
+      "sha256": "86bd987d65a1590fd3ad8d4eaa3b92ee4b7916cb4a42a7f330a10e151dfb83ec"
+    },
+    {
+      "path": "src/owner-attachment-host.mjs",
+      "sha256": "e0dd3457837a06a036448c53a077daa8cad4b0724b68cbfa849cf71acd47c6e6"
+    },
+    {
+      "path": "tests/native-inputs/host.test.mjs",
+      "sha256": "3d4101e7a7f1a0ee5106541c296d8aaa68ccb6dc2c4f0c71c1049e92ebdbb0da"
+    },
+    {
+      "path": "tests/native-inputs/images-disabled.test.mjs",
+      "sha256": "099cbf83c458b6c3eb7563cf80c096bf0cead519e95496da356a7d7fdc9033b3"
+    },
+    {
+      "path": "tests/native-inputs/integration.test.mjs",
+      "sha256": "8b16a9a1698947465e26155f7673c4abb0ec3b3429925c538a97280cdbc758be"
+    },
+    {
+      "path": "tests/native-inputs/lease.test.mjs",
+      "sha256": "85b783b99fc7dcae90dadbd1501248c35574430d71cc203ed87d48843da23550"
+    },
+    {
+      "path": "tests/native-inputs/registered-pdf.test.mjs",
+      "sha256": "7929503d0220d8e3d98e31b5985b0a39aff178a1f85298bc59618cf7e7c2d891"
+    },
+    {
+      "path": "tests/native-inputs/test_acquire.py",
+      "sha256": "6404394737504b3e431fbec377d13178030914a6985d620831403a027785f68e"
+    },
+    {
+      "path": "tests/native-inputs/test_image_transport.py",
+      "sha256": "baa019adc06ab241462bf633db5fcfa769012d8c2b77ec9a7b700f28b2147b9b"
+    },
+    {
+      "path": "tests/native-inputs/test_native_image_surface.py",
+      "sha256": "0bafc55e97701e08930d0eb8919aaf5ff9f16a3a001e8607b000b06b4855849e"
+    },
+    {
+      "path": "tests/native-inputs/test_row_image_surface.py",
+      "sha256": "8eb600af4e18882b30ab416ac88ac2bbabb8c3223296ccc02014fea6b6ecdf5c"
+    },
+    {
+      "path": "tests/native-inputs/test_sticker_profile.py",
+      "sha256": "390c872da1423dfb439bcaf4fb973db791018e6f507b5bf3a21603ca5adf0096"
+    },
+    {
+      "path": "tests/native-inputs/wiring.test.mjs",
+      "sha256": "bf31f6c9ff44c810dca549218724e5f33c4bfa9d41ad9f04c1166b909beda43e"
+    },
+    {
+      "path": "vendor/attachment-ingress/attachment-ingress-pdf.mjs",
+      "sha256": "cd81a7842969a80491ecc1818acda572f8ad3931e3ef3a95a7169fdad83f9a86"
+    },
+    {
+      "path": "vendor/attachment-ingress/saved-file-broker.mjs",
+      "sha256": "90035be76f7715e232721515fbf1063553526d2d36f8ac0f24ef28f9c7348f83"
+    },
+    {
+      "path": "vendor/attachment-ingress/saved_file_worker.py",
+      "sha256": "c850b9c956423e10360f24986d4c17e8e4fd72441640ba0c0eebae74beddb5e7"
+    },
+    {
+      "path": "vendor/owner-tools/index.mjs",
+      "sha256": "0f6df52875ff96f2fa11a45ee4eb6a06d76a8cd50e72da9bcd6333e1d9851ddc"
+    },
+    {
+      "path": "vendor/owner-tools/pdf_document.py",
+      "sha256": "cbbcf308681102178d782b4058ab9f4a3615abe90c10865cc307e91834ee468d"
+    },
+    {
+      "path": "vendor/owner-tools/worker.py",
+      "sha256": "a5c67bcb2fd3fab6e00517e74ef144b5213068e3868ce6de2cdd26bb7719caf1"
+    }
+  ]
+}

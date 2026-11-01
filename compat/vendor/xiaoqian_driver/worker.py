@@ -14,6 +14,8 @@ from .read_phases import ReadPhases
 from .draft_journal import DraftJournal
 from .owner_edge_controller import configure as configure_owner_edge
 from .lease import DesktopLease
+from .image_native import NativeImageBroker,ImageError
+from .saved_file_native import NativeSavedFileBroker,SavedFileError
 from .protocol import Chat, DriverConfig, DriverError, NotSent, SendUnknown, VERSION, decode, encode, MAX_LINE
 
 
@@ -97,6 +99,10 @@ def serve():
                         backend._read_phases=ReadPhases(Path(args["audit_path"]).parent,args["generation"])
                         backend._attachment_generation=args["generation"]
                         backend._attachment_audit_path=args["audit_path"]
+                        backend._native_image_broker=NativeImageBroker(backend,args['generation'],mode=config.mode,
+                            fixture=config.fake_options.get('native_image_fixture') if config.mode=='fake' else None)
+                        backend._native_saved_profile=config.native_saved_file_profile
+                        backend._native_saved_broker=NativeSavedFileBroker(backend,args['generation'])
                         result = {"protocol": VERSION, "pid": os.getpid(), "mode": config.mode}
                     else:
                         if backend is None:
@@ -109,13 +115,22 @@ def serve():
                             from .attachment_transport import dispatch,AttachmentError
                             try: result=dispatch(backend,config,command,args,backend._attachment_generation,backend._attachment_audit_path)
                             except AttachmentError as exc: raise DriverError(str(exc)) from None
+                        elif command in ('saved_file_prepare','saved_file_selected','saved_file_acquire'):
+                            result=backend._native_saved_broker.dispatch(Chat(**args['chat']),command,args)
+                        elif command in ('image_inspect','image_capture','image_current'):
+                            chat=Chat(**args['chat'])
+                            if chat not in config.allowed_chats:raise ImageError('IMAGE_CHAT_DENIED')
+                            result=backend._native_image_broker.dispatch(chat,command,args)
                         elif command in ("read", "send", "send_file", "transcribe", "extract_image"):
                             chat = Chat(**args["chat"])
                             if config.mode == "real" and chat not in config.allowed_chats:
                                 raise NotSent("chat_not_allowed")
                             if command == "read":
                                 with backend._read_phases.request(request_id):
+                                    backend._native_image_broker.before_read(chat)
                                     result = {"rows": backend.read(chat)}
+                                    result['image_read']=backend._native_image_broker.begin_read(chat,result['rows'])
+                                    backend._native_saved_broker.begin_read(chat,result['rows'],result['image_read'])
                                 backend._attachment_rows={row["key"]:dict(row) for row in result["rows"]}
                                 backend._attachment_chat_key=chat.key
                                 if getattr(backend,"last_controller_receipt",None):result["controller_receipt"]=backend.last_controller_receipt
@@ -144,6 +159,10 @@ def serve():
                         else:
                             raise DriverError("unknown_command")
                 response = {"v": VERSION, "id": request_id, "ok": True, "result": result}
+            except (ImageError,SavedFileError) as exc:
+                # Safe image errors contain codes only, never pixel buffers/UI strings.
+                response={"v":VERSION,"id":request_id,"ok":False,"error":{"code":exc.code,"send_status":None}}
+                if isinstance(exc,SavedFileError) and hasattr(exc,'native_receive_result'):response['error']['native_receive_result']=exc.native_receive_result
             except NotSent as exc:
                 response = {"v": VERSION, "id": request_id, "ok": False,
                             "error": {"code": exc.code, "send_status": "failed"}}

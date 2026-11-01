@@ -162,7 +162,7 @@ class RealBackend:
             rows = adapter.read()
         self.rows = {row.key: row for row in rows}
         return [{"key": row.key, "text": row.text, "role": row.role,
-                 "sender": row.sender, "image_available": row.image is not None,
+                 "sender": row.sender, "image_available": row.image is not None or getattr(row,'native_image_available',False),
                  "voice_available": row.voice is not None, "odd": row.odd} for row in rows]
 
     def transcribe(self, chat: Chat, source_key: str):

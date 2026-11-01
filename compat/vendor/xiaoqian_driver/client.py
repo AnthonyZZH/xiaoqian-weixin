@@ -128,6 +128,7 @@ class DriverClient:
                             self._ensure_worker(job.deadline)
                             result = self._request(job.command, job.args, job.deadline)
                             if job.command == "read":
+                                image_read=result.get('image_read')
                                 rows = result.get("rows")
                                 if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                                     raise DriverError("invalid_read_response")
@@ -141,7 +142,11 @@ class DriverClient:
                                 else:
                                     job.stage="inbox_commit"
                                     result=self._state.ingest(chat,rows)
+                                from .native_read_binding import bind_current_read
+                                self.last_native_rows=bind_current_read(self._state,chat,rows,image_read,received_witnesses=getattr(self,'_native_received_witnesses',())) if image_read else []
                                 self._attachment_snapshot_generation=self._generation
+                                self.last_image_read=image_read if isinstance(image_read,dict) and image_read.get('generation')==self._generation else None
+                                self._image_snapshot_generation=self._generation
                             elif job.command == "health":
                                 result = {**result, "generation": self._generation, "pid": self._process.pid}
                     job.stage="done"
@@ -242,6 +247,9 @@ class DriverClient:
             raise
 
     def _request(self, command: str, args: dict, deadline: float) -> dict:
+        if command in ('image_inspect','image_capture','image_current','saved_file_prepare','saved_file_selected','saved_file_acquire'):
+            from .image_transport import prepare as prepare_image
+            args=prepare_image(self,Chat(**args['chat']),args)
         if command in ("attachment_inspect","attachment_save_as","attachment_completion"):
             from .attachment_transport import prepare, AttachmentError
             try: args=prepare(self,Chat(**args["chat"]),args["card"],args["scope"],deadline)
@@ -282,8 +290,15 @@ class DriverClient:
             if response["ok"]:
                 if not isinstance(response.get("result"), dict):
                     raise DriverError("invalid_response")
-                return response["result"]
+                result=response['result']
+                if command=='saved_file_acquire':
+                    from .saved_file_transition import commit_received_transition
+                    commit_received_transition(self._state,Chat(**args['chat']),result,args['handle'])
+                return result
             error = response.get("error")
+            if command=='saved_file_acquire' and isinstance(error,dict) and isinstance(error.get('native_receive_result'),dict):
+                from .saved_file_transition import commit_received_transition
+                commit_received_transition(self._state,Chat(**args['chat']),error['native_receive_result'],args['handle'])
             if not isinstance(error, dict) or not isinstance(error.get("code"), str):
                 raise DriverError("invalid_error_response")
             exc = DriverError(error["code"])
@@ -414,6 +429,10 @@ class DriverClient:
         if not isinstance(result.get("text"), str):
             raise DriverError("invalid_transcription_response")
         return result["text"]
+
+    def native_image_command(self,chat,command,args,*,timeout=None):
+        if command not in ('image_inspect','image_capture','image_current','saved_file_prepare','saved_file_selected','saved_file_acquire'):raise DriverError('IMAGE_COMMAND_DENIED')
+        return self._submit(command,dict(args,chat=chat.to_dict()),timeout)
 
     def extract_image(self, chat: Chat, source_key: str, *, timeout: float | None = None) -> str:
         result = self._submit("extract_image", {"chat": chat.to_dict(), "source_key": source_key}, timeout)

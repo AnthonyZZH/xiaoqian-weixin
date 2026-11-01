@@ -183,7 +183,15 @@ def main():
         raise ToolError('REQUEST_SIZE_LIMIT')
     request = json.loads(raw)
     if request['operation'] == 'document':
-        return document(base64.b64decode(request['base64'], validate=True), request['extension'])
+        data = base64.b64decode(request['base64'], validate=True)
+        if request['extension'] == '.pdf':
+            from pdf_document import document_pdf, PDFError
+            try:
+                return document_pdf(data, page_start=request.get('page_start', 1),
+                                    page_count=request.get('page_count', 5), ocr=None)
+            except PDFError as error:
+                raise ToolError(str(error)) from None
+        return document(data, request['extension'])
     if request['operation'] == 'fetch_page':
         from web_reader import fetch_page, PageError
         try:

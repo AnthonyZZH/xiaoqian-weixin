@@ -1,0 +1,33 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {fileURLToPath} from 'node:url';import {spawnSync} from 'node:child_process';
+import {createDriverSavedFileHost} from '../../src/driver-saved-file-host.mjs';
+import {createOwnerAttachmentHost} from '../../src/owner-attachment-host.mjs';
+import {createOwnerToolkit} from '../../vendor/owner-tools/index.mjs';
+import {digest} from '../../src/state.mjs';
+const here=path.dirname(fileURLToPath(import.meta.url)),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+const python=process.env.XQ_TEST_PYTHON||'python';
+test('native receipt -> pinned real worker -> shared registry -> owner read, once and isolated',{skip:process.platform!=='win32'},async t=>{
+ const base=fs.mkdtempSync(path.join(here,'temporary-'));t.after(()=>{assert.equal(path.dirname(path.resolve(base)),here);fs.rmSync(base,{recursive:true,force:true});});
+ const fileRoot=path.join(base,'xwechat_files','fixture-account','msg','file');fs.mkdirSync(path.join(fileRoot,'2026-11'),{recursive:true});
+ const bytes=Buffer.from('synthetic owner document'),relativePath='2026-11/fixture.txt';fs.writeFileSync(path.join(fileRoot,relativePath),bytes);
+ const request={root:fileRoot,relativePath,expectedBytes:bytes.length};
+ const code="import sys,json;sys.path.insert(0,sys.argv[1]);from saved_file_identity import checked_path,WindowsFile;r,t=checked_path(json.loads(sys.argv[2]));f=WindowsFile(r,t);print(json.dumps(f.identity));f.close()";
+ const identityResult=spawnSync(python,['-B','-c',code,path.resolve(here,'../../compat/vendor/xiaoqian_driver'),JSON.stringify(request)],{encoding:'utf8'});assert.equal(identityResult.status,0,identityResult.stderr);const identity=JSON.parse(identityResult.stdout);
+ const owner={id:'owner',title:'TEST_OWNER',mode:'private',owner:true},binding=digest(JSON.stringify([owner.id,owner.title,owner.mode,owner.owner]));
+ const message={id:sha('native-message'),role:'user',readId:'native-read',generation:7,nativeRef:{kind:'file'}},read={readId:'native-read',generation:7,nativeCurrent:[]};read.nativeCurrent.push(message);
+ let nativeCalls=0,delivered=0;const trusted=new WeakSet([read]);
+ const driver={isTrustedNativeRead:r=>trusted.has(r),async withNativeFileLease(fn){return fn(async()=>{nativeCalls++;return {status:'ok',data:{kind:'native-saved-file',mappingMethod:'native-file-id',sourceMessageId:message.id,readId:read.readId,generation:7,accountId:'fixture-account',displayName:'fixture.txt',relativePath,expectedBytes:bytes.length,fileIdentity:identity,nativeFileId:JSON.stringify(identity),sha256:sha(bytes),exclusiveRead:true,completed:true}};});}};
+ const state={binding,messages:{[digest(message.id)]:{status:'accepted'}}},agent={},core={chats:new Map([['owner',owner]]),store:{data:{paused:false},audit(){}},closed:false,state:()=>state,isTrustedAttachmentRead:m=>m===message,
+  async deliverOwnerAttachment(_id,descriptor){delivered++;state.messages[digest('attachment:'+message.id)]={status:'accepted'};return descriptor;}};
+ const savedHost=createDriverSavedFileHost(driver,{fileRoot,accountId:'fixture-account',ownerChatId:'owner',ownerBindingId:binding,ledgerPath:path.join(base,'ledger.json'),isOwnerActive:()=>!core.store.data.paused});
+ const host=createOwnerAttachmentHost({getCore:()=>core,root:base,chats:[owner],savedHost,python});
+ const [descriptor]=await Promise.all([host.receiveOwnerFile({chatId:'owner',message,read}),host.receiveOwnerFile({chatId:'owner',message,read})]);
+ assert.equal(nativeCalls,1);assert.equal(delivered,1);
+ const toolkit=await createOwnerToolkit({isCurrentOwner:({agent:a,bindingId})=>a===agent&&bindingId===binding,attachments:host.attachments,python});
+ const bound=toolkit.bind({agent,bindingId:binding}),result=await bound.execute('owner_attachment_read',{attachmentId:descriptor.attachmentId},{agent,signal:new AbortController().signal,callId:'fixture-read'});
+ assert.equal(result.text,bytes.toString());assert.equal(result.sourceMessageId,message.id);
+ assert.equal((await host.receiveOwnerFile({chatId:'owner',message,read})).status,'duplicate');assert.equal(nativeCalls,1);
+ delete state.messages[digest('attachment:'+message.id)];
+ const reloaded=createOwnerAttachmentHost({getCore:()=>core,root:base,chats:[owner],savedHost,python});
+ assert.equal((await reloaded.receiveOwnerFile({chatId:'owner',message,read})).status,'registered-existing');assert.equal(nativeCalls,1);assert.equal(delivered,1);assert.equal(reloaded.registered()[0].attachmentId,descriptor.attachmentId);
+ await assert.rejects(bound.execute('owner_attachment_read',{attachmentId:descriptor.attachmentId},{agent:{},signal:new AbortController().signal,callId:'foreign-read'}),e=>e.code==='OWNER_AGENT_MISMATCH');
+});

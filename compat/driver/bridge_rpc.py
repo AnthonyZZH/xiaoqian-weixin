@@ -12,7 +12,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "vendor"))
-# Auxiliary media/wake packages may be shared by a source-only core checkout.
+# Auxiliary public media/wake packages are shared by the source checkout.
 sys.path.insert(1, str(Path(__file__).resolve().parents[2] / "vendor"))
 from xiaoqian_driver import Chat, DriverClient, DriverConfig  # noqa: E402
 from xiaoqian_media import MediaLibrary  # noqa: E402
@@ -57,6 +57,7 @@ def serve():
                     if len(owner_chats) > 1:
                         raise ValueError("ambiguous_owner_edge_chat")
                     options = DriverConfig(
+                        native_saved_file_profile=config.get("native_saved_file_profile"),
                         mode=config["mode"], allow_real=config.get("allow_real") is True,
                         adapter_root=config.get("adapter_root"),
                         media_root=config.get("media_root"),
@@ -67,6 +68,7 @@ def serve():
                         fake_options=config.get("fake_options", {}),
                     )
                     client = DriverClient(config["state_dir"], options)
+                    client._native_received_witnesses=config.get("native_received_witnesses",[])
                     media_root = config.get("media_root")
                     if not isinstance(media_root, str) or not Path(media_root).is_absolute():
                         raise ValueError("media_root_required")
@@ -108,7 +110,17 @@ def serve():
                 if target_id not in chats:
                     raise ValueError("target_denied")
                 chat = chats[target_id]
-                if op in ("attachment_inspect","attachment_save_as","attachment_completion"):
+                if op=='saved_file_acquire':
+                    if target_id not in trusted_owner or chat.mode!='private':raise ValueError('OWNER_ATTACHMENT_REQUIRED')
+                    if config.get('native_saved_files_enabled') is not True:raise ValueError('NATIVE_SAVED_FILES_DISABLED')
+                    data=client.native_image_command(chat,op,{key:args.get(key) for key in ('messageId','readId','generation')},timeout=14)
+                    reply(request_id,'ok',code='NATIVE_SAVED_FILE',data=data)
+                elif op in ('image_inspect','image_capture','image_current','saved_file_prepare','saved_file_selected'):
+                    if target_id not in trusted_owner or chat.mode!='private':raise ValueError('OWNER_IMAGE_REQUIRED')
+                    if not allow_static_capture:raise ValueError('STATIC_CAPTURE_NOT_ENABLED')
+                    data=client.native_image_command(chat,op,{key:args.get(key) for key in ('messageId','readId','generation','ticket')})
+                    reply(request_id,'ok',code='NATIVE_IMAGE',data=data)
+                elif op in ("attachment_inspect","attachment_save_as","attachment_completion"):
                     if target_id not in trusted_owner or chat.mode!="private":raise ValueError("owner_attachment_required")
                     import time
                     scope=args["scope"]
@@ -122,12 +134,20 @@ def serve():
                     for item in result.messages:
                         if item.chat_key != chat.key:
                             raise ValueError("chat_binding_mismatch")
+                        image_source=None
+                        if item.image_available:
+                            from xiaoqian_driver.image_transport import current_source_key
+                            image_source=current_source_key(client,chat,item.message_id)
                         rows.append({"id": item.message_id, "text": item.text,
                                      "role": item.role, "sender": item.sender,
-                                     "sourceKey": item.source_key,
+                                     "sourceKey": image_source or item.source_key,
                                      "imageAvailable": item.image_available,
                                      "voiceAvailable": item.voice_available})
-                    reply(request_id, "ok", code="READ", messages=rows, readOutcome=client.last_read_outcome, identityDeferred=getattr(client._state, "last_identity_defer", None), identityDuplicateCount=result.duplicate_count)
+                    image_read=getattr(client,'last_image_read',None) or {}
+                    reply(request_id, "ok", code="READ", messages=rows, readOutcome=client.last_read_outcome, identityDeferred=getattr(client._state, "last_identity_defer", None), identityDuplicateCount=result.duplicate_count,
+                          identityVersion='uia-row-v2' if image_read.get('schema')=='xq.native-image-read/v1' else None,
+                          generation=image_read.get('generation'),readId=image_read.get('readId'),
+                          nativeCurrent=getattr(client,'last_native_rows',[]) if target_id in trusted_owner and chat.mode=='private' else [])
                 elif op == "ack":
                     ids = args.get("messageIds")
                     if not isinstance(ids, list) or len(ids) > 200 or any(

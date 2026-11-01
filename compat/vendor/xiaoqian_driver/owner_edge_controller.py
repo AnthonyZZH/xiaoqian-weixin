@@ -56,7 +56,11 @@ def read_latest(backend,chat,*,selected=None):
     if module.foreground()!=adapter.hwnd:raise DriverError('owner_edge_foreground_changed')
     backend.rows={row.key:row for row in rows}
     result=[{'key':row.key,'text':row.text,'role':row.role,'sender':row.sender,
-             'image_available':row.image is not None,'voice_available':row.voice is not None,'odd':row.odd} for row in rows]
+             'image_available':row.image is not None or getattr(row,'native_image_available',False),'voice_available':row.voice is not None,'odd':row.odd} for row in rows]
+    from .native_row_ref import observe
+    for raw,row in zip(result,rows):
+        ref=observe(backend,row)
+        if ref is not None:raw['native_ref']=ref
     backend._edge_sequence+=1
     proof={'chat_key':chat.key,'page_digest':hashlib.sha256(encoded(result)).hexdigest(),'at_live_edge':True,
            'controller_epoch':backend._edge_epoch,'viewport_generation':chat.key+':latest-native-navigation',

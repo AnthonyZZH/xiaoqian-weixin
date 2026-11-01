@@ -6,5 +6,11 @@
       config:
         enabled: false
         mode: mock
+        mediaAllowStaticCapture: false
+        vision:
+          enabled: false
+          inputMode: native_attachment
+        attachments:
+          savedFilesEnabled: false
         stateDir: ./state/xiaoqian
         chats: []

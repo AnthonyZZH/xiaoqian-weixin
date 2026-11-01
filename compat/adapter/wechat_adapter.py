@@ -84,6 +84,8 @@ class Message:
     image: object = None  # PIL crop of a sticker/picture bubble, for incoming media only
     voice: object = None  # UI row for a new incoming voice message; converted lazily by Runner
     odd: bool = False  # private message type WeChat exposed but the adapter could not understand
+    native_row: object = None  # Trusted current UIA object, never serialized.
+    native_image_available: bool = False
 
 
 TEXT_ITEM = "mmui::ChatTextItemView"
@@ -443,7 +445,8 @@ class WeChatAdapter:
             # child walk, the screenshot and OCR. This is what keeps reads fast.
             ident = (tuple(item.GetRuntimeId()), item.ClassName, item.Name)
             if ident in self.row_cache:
-                result.append(self.row_cache[ident])
+                cached=self.row_cache[ident];cached.native_row=item
+                result.append(cached)
                 continue
             controls = list(descendants(item))
             role = self.role_of(item, controls, rect, grab)
@@ -482,13 +485,14 @@ class WeChatAdapter:
             if self.mode == "group" and role == "user":
                 extra = [p for p in parts if p != text and not MEDIA_NAME.match(p)]
                 sender = self.sender_of(key, item, rect, grab, dpi, extra[0] if extra else None)
-            image = self.bubble(item, rect, grab, dpi, role) if media and role == "user" else None
+            native_image=bool(getattr(self,"native_image_enabled",False) and media and role=="user")
+            image = self.bubble(item, rect, grab, dpi, role) if media and role == "user" and not native_image else None
             odd = not known and self.mode == "private"
             voice_item = item if voice and role == "user" else None
-            result.append(Message(key, text, role, sender, image, voice_item, odd))
+            result.append(Message(key, text, role, sender, image, voice_item, odd,item,native_image))
             if len(self.row_cache) > 2000:
                 self.row_cache.clear()
-            self.row_cache[ident] = Message(key, text, role, sender, None, voice_item, odd)
+            self.row_cache[ident] = Message(key, text, role, sender, None, voice_item, odd,item,native_image)
             # image only matters the first time; the voice row stays usable until Runner confirms it is new
         if visible_rows and not result:
             raise RuntimeError("消息区域被遮挡或收发方向无法确认，暂停这一轮")
@@ -834,22 +838,6 @@ def _text_press_dispatch(self,edit,cancel,previous):
 WeChatAdapter.press_send=_text_press_dispatch
 WeChatAdapter.send=guarded_send(WeChatAdapter.send,foreground)
 
-# Hash-only text-send phase diagnostics; no message body or member names logged.
-_text_guarded_send=WeChatAdapter.send
-def _logged_text_send(self,text,*args,**kwargs):
-    import json,hashlib
-    from pathlib import Path
-    out={'bodyHash':hashlib.sha256(text.encode()).hexdigest(),'textLength':len(text),'atCount':len(kwargs.get('at',())),'targetHash':hashlib.sha256((self.mode+':'+self.target).encode()).hexdigest()}
-    try:
-        result=_text_guarded_send(self,text,*args,**kwargs)
-        out.update(status='confirmed',code='input_cleared_after_click')
-        return result
-    except Exception as exc:
-        out.update(status='failed_before_click' if isinstance(exc,SendNotAttempted) else 'unknown_after_click',code=getattr(exc,'code',type(exc).__name__),cleanup=getattr(exc,'cleanup',None))
-        raise
-    finally:
-        Path(r'C:\xiaoqian\workspaces\harness-native-20261029\acceptance\text-send-last-phase.json').write_text(json.dumps(out),encoding='utf-8')
-WeChatAdapter.send=_logged_text_send
 # Record only a whole draft that this mention operation can prove it produced.
 _original_mention=WeChatAdapter.mention
 def _owned_mention(self,edit,member,cancel):

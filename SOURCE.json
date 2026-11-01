@@ -18,7 +18,10 @@
     "read-terminal-outcome-evidence",
     "read-stage-metadata-and-title-selection",
     "native-ui-predicate-lookup-and-confirmed-worker-recovery",
-    "canonical-owner-attachment-ports-download-disabled"
+    "canonical-owner-attachment-ports-download-disabled",
+    "native-image-read-binding-and-static-sticker-frames",
+    "shared-owner-attachment-registry-and-local-pdf-parser",
+    "r10-native-file-receive-candidate-disabled"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -74,5 +77,22 @@
     "endToEndAgentFileReadingAccepted": false,
     "temporaryProbesIncluded": false,
     "wholeSnapshotDeploymentClaimed": false
+  },
+  "nativeInputsExport": {
+    "revision": "r10-public-source-candidate",
+    "reviewedPublicBase": "598c9f6dd63fd7bb80702dcee04c2a035145e853",
+    "sourceManifest": "docs/NATIVE-INPUTS-SOURCE.json",
+    "notes": "docs/NATIVE-INPUTS.md",
+    "runtimeDataIncluded": false,
+    "privateOperationsIncluded": false,
+    "automaticImagesEnabled": false,
+    "automaticFileReceiveDeployed": false,
+    "freshUnreceivedFileAcceptancePassed": false,
+    "previouslyRegisteredPDF": {
+      "actualOwnerToolReadPassed": true,
+      "pages": 1,
+      "documentCharacters": 8,
+      "privateFixtureIncluded": false
+    }
   }
 }
