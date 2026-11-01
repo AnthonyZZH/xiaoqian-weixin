@@ -325,17 +325,20 @@ class NativeRowImageSurface:
         self._measurement_attempted = weakref.WeakSet()
         self._static_sticker_frames = weakref.WeakKeyDictionary()
 
-    def _context(self, chat, row):
+    def _context(self, chat, row, *, defer_group_header=False):
         from .row_image_geometry import pure_photo_row, search_bounds
         backend, adapter = self.backend, self.backend.adapter
-        require(chat.mode == 'private' and chat.key == self.profile['ownerChatKey'], 'IMAGE_OWNER_PRIVATE_INCOMING_REQUIRED')
+        group_keys=self.profile.get('groupChatKeys',[])
+        require(isinstance(group_keys,list) and len(group_keys)<=1 and all(isinstance(k,str) and k for k in group_keys),'IMAGE_GROUP_SCOPE_UNAUTHORIZED')
+        is_group=chat.mode=='group' and chat.key in group_keys
+        require((chat.mode=='private' and chat.key==self.profile['ownerChatKey']) or is_group,'IMAGE_GROUP_SCOPE_UNAUTHORIZED')
         require(getattr(backend.module, 'KEEP_FRONT', None) is False, 'IMAGE_NONACTIVATING_ADAPTER_REQUIRED')
         require(backend.chat == chat and adapter.target == chat.name and adapter.mode == chat.mode, 'IMAGE_CHAT_CHANGED')
         native = getattr(row, 'native_row', None)
         require(native is not None and getattr(row, 'role', None) == 'user' and
                 getattr(row, 'native_image_available', False) is True, 'IMAGE_NATIVE_ROW_REQUIRED')
-        media_kind = pure_photo_row(native.ClassName, native.Name, private=True, incoming=True,
-                                   allow_static_sticker=self.static_sticker_profile)
+        media_kind = pure_photo_row(native.ClassName, native.Name, private=chat.mode=='private', incoming=True,authorized_group=is_group,
+                                   allow_static_sticker=self.static_sticker_profile,allow_refer_photo=self.profile.get('allowReferPhotos') is True)
         edit = adapter.validate()
         window, hwnd = adapter.window, int(adapter.hwnd)
         pid, dpi = int(self.api.window_pid(hwnd)), self.api.window_dpi(hwnd)
@@ -345,18 +348,37 @@ class NativeRowImageSurface:
                 not native.IsOffscreen and descendant(native, listing) and descendant(listing, window), 'IMAGE_ROW_NOT_VISIBLE')
         row_bounds, viewport, window_bounds = rectangle(native), rectangle(listing), rectangle(window)
         require(inside(row_bounds, window_bounds), 'IMAGE_ROW_CLIPPED')
-        search = search_bounds(row_bounds, viewport, dpi, incoming_content_only=self.static_sticker_profile)
+        measured_row=dict(row_bounds);header_proof=None
+        if is_group and not defer_group_header:
+            sender=getattr(row,'sender','')
+            require(isinstance(sender,str) and bool(sender),'IMAGE_GROUP_SENDER_UNAVAILABLE')
+            pending=[(native,0)];headers=[];visited=0
+            while pending:
+                control,depth=pending.pop();visited+=1
+                require(visited<=96,'IMAGE_GROUP_HEADER_UNVERIFIED')
+                if depth>5:continue
+                if getattr(control,'ControlTypeName',None)=='TextControl' and not control.IsOffscreen and control.Name==sender:
+                    box=rectangle(control);scale=dpi/96
+                    if (inside(box,row_bounds) and box['x']>=row_bounds['x']+round(64*scale) and
+                        6*scale<=box['height']<=28*scale and box['y']>=row_bounds['y'] and box['y']+box['height']<=row_bounds['y']+round(40*scale)):
+                        headers.append((control,box))
+                pending.extend((c,depth+1) for c in control.GetChildren())
+            require(len(headers)==1,'IMAGE_GROUP_HEADER_UNVERIFIED')
+            header,header_bounds=headers[0];top=header_bounds['y']+header_bounds['height']+round(2*dpi/96)
+            measured_row.update(y=top,height=row_bounds['y']+row_bounds['height']-top)
+            header_proof={'runtimeId':list(runtime_id(header)),'bounds':header_bounds,'nameHash':text_hash(header.Name)}
+        search = search_bounds(measured_row, viewport, dpi, incoming_content_only=self.static_sticker_profile)
         require(self.api.occlusion_free(hwnd, native, search) is True, 'IMAGE_CONTROL_OCCLUDED')
         return {'window': {'hwnd': hwnd, 'pid': pid, 'runtimeId': list(runtime_id(window))},
                 'windowBounds': window_bounds, 'viewportBounds': viewport, 'rowBounds': row_bounds,
                 'rowRuntimeId': list(runtime_id(native)), 'rowNameHash': text_hash(native.Name or ''),
                 'draftHash': text_hash(adapter.input_value(edit)), 'dpi': dpi, 'searchBounds': search,
-                'mediaKind': media_kind, 'sourceKind': 'static_screenshot', 'animationFramesAnalyzed': False}
+                'groupHeader':header_proof,'mediaKind': media_kind, 'sourceKind': 'static_screenshot', 'animationFramesAnalyzed': False}
 
     def observe(self, chat, row):
         """Read-stage native context only. Existing/ACKed photos cost no pixels."""
         try:
-            context = self._context(chat, row)
+            context = self._context(chat, row,defer_group_header=True)
             proof = RowImageMeasurement({'phase': 'observed'}, context, chat, row)
             self._observed.add(proof)
             return proof
@@ -370,7 +392,8 @@ class NativeRowImageSurface:
         require(observation not in self._measurement_attempted, 'IMAGE_MEASUREMENT_ALREADY_ATTEMPTED')
         require(self.current(observation), 'IMAGE_SNAPSHOT_STALE')
         self._measurement_attempted.add(observation)
-        chat, row, context = observation._chat, observation._row, observation._context
+        chat, row = observation._chat, observation._row
+        context = self._context(chat,row) if chat.mode=='group' else observation._context
         try:
             try:
                 pixels = self.api.capture_rgba(context['searchBounds'])
@@ -404,7 +427,7 @@ class NativeRowImageSurface:
         if not isinstance(proof, RowImageMeasurement) or (proof not in self._issued and proof not in self._observed):
             return False
         try:
-            return self._context(proof._chat, proof._row) == proof._context
+            return self._context(proof._chat, proof._row,defer_group_header=proof.state.get('phase')=='observed') == proof._context
         except Exception:
             return False
 

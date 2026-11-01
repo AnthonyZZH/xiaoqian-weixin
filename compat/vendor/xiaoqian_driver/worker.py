@@ -99,6 +99,9 @@ def serve():
                         backend._read_phases=ReadPhases(Path(args["audit_path"]).parent,args["generation"])
                         backend._attachment_generation=args["generation"]
                         backend._attachment_audit_path=args["audit_path"]
+                        groups=args.get('group_image_chats',[])
+                        backend._group_image_keys={Chat(**value).key for value in groups if Chat(**value) in config.allowed_chats and Chat(**value).mode=='group'}
+                        if len(backend._group_image_keys)>1:raise DriverError('GROUP_IMAGE_SCOPE_INVALID')
                         backend._native_image_broker=NativeImageBroker(backend,args['generation'],mode=config.mode,
                             fixture=config.fake_options.get('native_image_fixture') if config.mode=='fake' else None)
                         backend._native_saved_profile=config.native_saved_file_profile

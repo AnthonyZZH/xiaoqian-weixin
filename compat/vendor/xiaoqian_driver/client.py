@@ -232,7 +232,7 @@ class DriverClient:
             hello_deadline = min(deadline, time.monotonic() + self.config.startup_timeout)
             owner_edge=client_options(self)
             result = self._request("hello", {"config": asdict(self.config), "generation": self._generation, "owner_edge":owner_edge,
-                                            "audit_path": str(self.state_dir / "fake-events.jsonl")}, hello_deadline)
+                                            "audit_path": str(self.state_dir / "fake-events.jsonl"), "group_image_chats":getattr(self,"_group_image_chats",[])}, hello_deadline)
             if result.get("pid") != process.pid:
                 raise DriverError("worker_identity_mismatch")
             if result.get("protocol") != VERSION or result.get("mode") != self.config.mode:

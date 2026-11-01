@@ -69,6 +69,9 @@ def serve():
                     )
                     client = DriverClient(config["state_dir"], options)
                     client._native_received_witnesses=config.get("native_received_witnesses",[])
+                    group_image_ids=config.get('group_image_ids',[])
+                    if not isinstance(group_image_ids,list) or len(group_image_ids)>1 or any(v not in chats or chats[v].mode!='group' or v in trusted_owner for v in group_image_ids):raise ValueError('GROUP_IMAGE_SCOPE_INVALID')
+                    client._group_image_chats=[chats[v].to_dict() for v in group_image_ids]
                     media_root = config.get("media_root")
                     if not isinstance(media_root, str) or not Path(media_root).is_absolute():
                         raise ValueError("media_root_required")
@@ -115,7 +118,12 @@ def serve():
                     if config.get('native_saved_files_enabled') is not True:raise ValueError('NATIVE_SAVED_FILES_DISABLED')
                     data=client.native_image_command(chat,op,{key:args.get(key) for key in ('messageId','readId','generation')},timeout=14)
                     reply(request_id,'ok',code='NATIVE_SAVED_FILE',data=data)
-                elif op in ('image_inspect','image_capture','image_current','saved_file_prepare','saved_file_selected'):
+                elif op in ('image_inspect','image_capture','image_current'):
+                    if not (target_id in trusted_owner and chat.mode=='private') and target_id not in group_image_ids:raise ValueError('IMAGE_CHAT_NOT_AUTHORIZED')
+                    if not allow_static_capture:raise ValueError('STATIC_CAPTURE_NOT_ENABLED')
+                    data=client.native_image_command(chat,op,{key:args.get(key) for key in ('messageId','readId','generation','ticket')})
+                    reply(request_id,'ok',code='NATIVE_IMAGE',data=data)
+                elif op in ('saved_file_prepare','saved_file_selected'):
                     if target_id not in trusted_owner or chat.mode!='private':raise ValueError('OWNER_IMAGE_REQUIRED')
                     if not allow_static_capture:raise ValueError('STATIC_CAPTURE_NOT_ENABLED')
                     data=client.native_image_command(chat,op,{key:args.get(key) for key in ('messageId','readId','generation','ticket')})

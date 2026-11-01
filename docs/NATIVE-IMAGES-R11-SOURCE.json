@@ -1,0 +1,152 @@
+{
+  "revision": "r11-group-text-preflight-public-export",
+  "reviewedPublicBase": "dabd2956873cb40dfdbd762eedce73a30ad84f63",
+  "notes": "docs/GROUP-IMAGES-R11.md",
+  "sourceCorrespondence": {
+    "scope": "confirmed r11 image component delta; not the later combined candidate",
+    "nativeInstallRecordHashesMatched": 7,
+    "applicationEvidence": "Imported module paths, runtime revision and pre-activation source timestamps match recorded activation; not an independently dumped live-module byte hash",
+    "originalRoutingAndScopePreserved": true,
+    "wholeSnapshotDeploymentClaimed": false
+  },
+  "deploymentStatus": {
+    "componentEnabledInControlledDeployment": true,
+    "ownerPrivateAndOneExistingConfiguredGroup": true,
+    "publicTemplateEnabledByDefault": false,
+    "newNaturalImageRecognitionAccepted": false,
+    "oldImagesReplayed": false,
+    "automaticFileReceiveDeployed": false,
+    "freshUnreceivedFileAcceptancePassed": false
+  },
+  "privateRuntimeIncluded": false,
+  "privateOperationsIncluded": false,
+  "realImagesOrChatIncluded": false,
+  "publicAdaptations": [
+    "preserve explicit owner-private RPC check and existing configured owner recovery",
+    "preserve r10 file acquisition, registry, FIFO and bounded local PDF paths",
+    "inject existing synchronous group text policy instead of private group names, aliases or policy source",
+    "startup-only integration replaces private live-prototype adoption; not enabled automatically",
+    "exclude private calibrated image profile and deployment/rollback/evidence bundles",
+    "keep disabled automatic images metadata-only so following owner text is not blocked"
+  ],
+  "validation": {
+    "nodeTargeted": {
+      "tests": 28,
+      "passed": 28,
+      "failed": 0,
+      "skipped": 0
+    },
+    "pythonNative": {
+      "tests": 58,
+      "passed": 58,
+      "failed": 0
+    },
+    "ownerRecovery": {
+      "tests": 12,
+      "passed": 12,
+      "failed": 0
+    },
+    "configuredOwnerGroupReceiptRegression": "passed",
+    "gateFalse": {
+      "evidenceAcquisition": 0,
+      "screenshots": 0,
+      "sdkAdmission": 0,
+      "modelFacingImageInput": 0
+    },
+    "sourceSyntax": "passed",
+    "relativeImports": "resolved",
+    "sourceScan": {
+      "files": 20,
+      "findings": 0,
+      "scope": "changed and new public files; high-signal secret/private identifier patterns and forbidden binary artifacts"
+    },
+    "notRun": {
+      "remoteCI": "Not run",
+      "installedHarnessSDK": "No corresponding SDK path on laptop; not counted as passed",
+      "projectLintAndTypecheck": "No configured check"
+    },
+    "noRealUIOrModelCalls": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "6beac9a475b63a00bff2675fa7adf8339fc13f2fe846e572163ce9fbda3a4a48"
+    },
+    {
+      "path": "SOURCE.json",
+      "sha256": "ccec3b13bc059030cc11c2f626b875f5fc04520bbfbf2f050a6cfa437bf0c6c7"
+    },
+    {
+      "path": "compat/driver/bridge_rpc.py",
+      "sha256": "09089f877c8303f5025babed9a4c35d33a50e073f6fa6e8f61e4d82d992b0e47"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/client.py",
+      "sha256": "f32d310c741f3854496dbe5a803925e019fb0dd538a9f24a4cfaa3148ba99ec8"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/image_native.py",
+      "sha256": "93a3a7c26884b817e4c2aa18e0227b08d3329b623ad371c721233b8174cccce2"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/native_image_surface.py",
+      "sha256": "ca650a9b4537d6a6e18f3c546595996d81549e2a64466d1c4b00fdb254ec06f8"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/row_image_geometry.py",
+      "sha256": "b48f963701cec046929b76b2a89320175b9aba54dc2631a92512b03a7e286922"
+    },
+    {
+      "path": "compat/vendor/xiaoqian_driver/worker.py",
+      "sha256": "247f3ee33fb8bf83460b69eb99151038b467ec30a445957c948dc2362794d763"
+    },
+    {
+      "path": "docs/GROUP-IMAGES-R11.md",
+      "sha256": "ada637e8282c9c09908f04e7541e2f223f715598b5665cebd5403d441200eab7"
+    },
+    {
+      "path": "docs/NATIVE-INPUTS.md",
+      "sha256": "921592d6a124ec82e743c45e87b1c5ddffba70e9a2e221691a45b86c9184e499"
+    },
+    {
+      "path": "driver/durable-client.mjs",
+      "sha256": "8e313b2fb6d5f648becad452ac4130f22ef41fcc3d1958c3d66291bf2f0e4c20"
+    },
+    {
+      "path": "src/core.mjs",
+      "sha256": "354d43b5a462c02e15951a93a98ab0c264a50646f33c49247d9c078af755263f"
+    },
+    {
+      "path": "src/group-image-preflight.mjs",
+      "sha256": "0e62678f3187c00d7e4ae1ad806662f5143acc90f6eb811948334a8ed9a28afc"
+    },
+    {
+      "path": "src/native-image-input.mjs",
+      "sha256": "d745b6b4f3340f7ab9bbf232737466c85c82cf8776b73c9f6253dd1759a3d48c"
+    },
+    {
+      "path": "src/routed-image-input.mjs",
+      "sha256": "b63432de23fb7d2af54f48d15bd84e0d5c453952cb2e8854dbdf5acfd06ea0f8"
+    },
+    {
+      "path": "src/scoped-group-images.mjs",
+      "sha256": "f59445d28f605dadacdfb541dc91ec5c07c15d7e0306b2bfe59169ef824f8b02"
+    },
+    {
+      "path": "tests/native-inputs/group-preflight.test.mjs",
+      "sha256": "7fec077ac99efdd63793726fa3b6ca76111ceaf94c2c6bcae30625f81f959d45"
+    },
+    {
+      "path": "tests/native-inputs/test_group_surface.py",
+      "sha256": "5833339af5514da95f420d8c16edf582569e8bc3eee6a17c91844769eb7e3de4"
+    },
+    {
+      "path": "tests/native-inputs/test_image_transport.py",
+      "sha256": "c54e9d8d72dc9fe1d924bc2e18f158adfc20c47f4501498c0baf7d506ab929b0"
+    },
+    {
+      "path": "tests/native-inputs/test_sticker_profile.py",
+      "sha256": "f8a9c02fd32113f645b5838d2638b3804a2120a8c0abc850653e86e548b24084"
+    }
+  ]
+}

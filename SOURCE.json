@@ -21,7 +21,8 @@
     "canonical-owner-attachment-ports-download-disabled",
     "native-image-read-binding-and-static-sticker-frames",
     "shared-owner-attachment-registry-and-local-pdf-parser",
-    "r10-native-file-receive-candidate-disabled"
+    "r10-native-file-receive-candidate-disabled",
+    "r11-group-text-gate-before-evidence-and-scoped-image-routing"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -93,6 +94,21 @@
       "pages": 1,
       "documentCharacters": 8,
       "privateFixtureIncluded": false
-    }
+    },
+    "automaticImagesEnabledScope": "public-template-default-only; controlled r11 deployment status is recorded in groupImagesR11"
+  },
+  "groupImagesR11": {
+    "revision": "qwq-single-owner/v6b-image-preflight",
+    "reviewedPublicBase": "dabd2956873cb40dfdbd762eedce73a30ad84f63",
+    "sourceManifest": "docs/NATIVE-IMAGES-R11-SOURCE.json",
+    "notes": "docs/GROUP-IMAGES-R11.md",
+    "componentDeploymentRecorded": true,
+    "ownerAndSingleConfiguredGroupEnabledInControlledDeployment": true,
+    "publicTemplateEnabledByDefault": false,
+    "freshNaturalImageRecognitionAccepted": false,
+    "existingGroupPolicyRequired": true,
+    "wholeSnapshotDeploymentClaimed": false,
+    "privateRuntimeIncluded": false,
+    "privateOperationsIncluded": false
   }
 }

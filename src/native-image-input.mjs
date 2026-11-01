@@ -81,7 +81,7 @@ export function createNativeImageInput({attachments,provider,getScope}={}){
     async content(ticket,{chatId,messageId}){
       const row=tickets.get(ticket);
       check(row&&row.chatId===chatId&&row.messageId===messageId,'IMAGE_TICKET_SCOPE_MISMATCH');
-      current(chatId,row.scope);check(await provider.isCurrent(row.evidence)===true,'IMAGE_SNAPSHOT_STALE');
+      current(chatId,row.scope);check(await provider.isCurrent(row.evidence)===true,'IMAGE_SNAPSHOT_STALE');current(chatId,row.scope);
       return structuredClone(row.blocks);
     }
   });

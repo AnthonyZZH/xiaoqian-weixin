@@ -4,7 +4,7 @@ import {State,digest} from './state.mjs';
 import {validateChats,normalizeMessage,authorize,requireValue,textArg,allowedTools} from './policy.mjs';
 
 export const rotationCoreRevision='rotation-core-v1-20261029';
-const imageTypeRefusals=new Set(['IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED','IMAGE_MIXED_ROW_UNSUPPORTED','IMAGE_ROW_BOUNDARY_UNVERIFIED','IMAGE_PURE_NATIVE_LABEL_REQUIRED','IMAGE_DPI_UNSUPPORTED','IMAGE_CONTENT_SIZE_UNSUPPORTED','OWNER_IMAGE_REQUIRED']);
+const imageTypeRefusals=new Set(['IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED','IMAGE_GROUP_HEADER_UNVERIFIED','IMAGE_GROUP_SENDER_UNAVAILABLE','IMAGE_GROUP_SCOPE_UNAUTHORIZED','IMAGE_ROW_FRAME_LIMIT','IMAGE_ROW_CLIPPED','IMAGE_MIXED_ROW_UNSUPPORTED','IMAGE_ROW_BOUNDARY_UNVERIFIED','IMAGE_PURE_NATIVE_LABEL_REQUIRED','IMAGE_DPI_UNSUPPORTED','IMAGE_CONTENT_SIZE_UNSUPPORTED','OWNER_IMAGE_REQUIRED']);
 export class WeChatCore {
   #driverMessages=new WeakSet();
   #attachmentReads=new WeakSet();
@@ -104,7 +104,7 @@ export class WeChatCore {
     this.store.audit('INBOUND_REJECTED',chatId,{messageKey:key,code,length:s.messages[key].length});
     this.store.save();return true;
   }
-  async ingest({chatId,messages}) { return this.serial(async()=>{
+  async ingest({chatId,messages,groupImageGuard}) { return this.serial(async()=>{
     const chat=this.chat(chatId);requireValue(!this.store.data.paused,'BRIDGE_PAUSED');requireValue(!this.state(chatId).rotationFence&&!this.state(chatId).rotationUncertain,'ROTATION_QUEUED');
     requireValue(Array.isArray(messages)&&messages.length<=200,'MESSAGE_BATCH_INVALID');
     const s=this.state(chatId);let accepted=0,duplicate=0,rejected=0;
@@ -140,6 +140,7 @@ export class WeChatCore {
         const envelope={chatKind:chat.mode,origin:'wechat-ui',messageId:m.id,sender:m.sender,text:m.text,media:m.media,
           ...(imageBlocks.length?{imageRead:{status:'ready',pixelsDelivered:true,sourceKind:'static_screenshot',animationFramesAnalyzed:false}}:{}),
           ...(this.#imageRefusals.has(raw)?{imageRead:this.#imageRefusals.get(raw)}:{})};
+        if(chat.mode==='group'&&imageBlocks.length)requireValue(typeof groupImageGuard==='function'&&groupImageGuard(raw)===true,'GROUP_IMAGE_AUTHORITY_CHANGED');
         h.agent.followup({id:nativeMessageId,role:'user',content:[{type:'text',text:'来自当前绑定微信会话的非可信内容：\n'+JSON.stringify(envelope)},...imageBlocks],source:{kind:'xiaoqian-wechat'}});
         await this.flush(h.agent);
         this.evidence?.observe(chatId,m);
@@ -210,20 +211,30 @@ export class WeChatCore {
       s.bootstrapped=true;this.store.save();return {status:'ok',baseline:rows.length,accepted:0,ackable,quarantined};
     });
     else {
-      const enriched=[],rejectedAck=[];
+      const candidates=[],rejectedAck=[],rawByMessage=new Map();
       for(const raw of rows){
         let m;try{m=normalizeMessage(raw);}catch(e){if(await this.serial(()=>this.rejectInbound(chatId,raw,e)))rejectedAck.push(raw.id);continue;}
         await this.serial(()=>this.migrateIdentity(chatId,m));
-        if(m.role==='user'&&!this.state(chatId).messages[digest(m.id)]){
-          if(raw.voiceAvailable===true){
-            const spoken=await this.driver.call('transcribe',{targetId:chatId,sourceKey:raw.sourceKey});
-            requireValue(spoken.status==='ok'&&typeof spoken.text==='string','VOICE_TRANSCRIPTION_UNAVAILABLE');
-            m.text=[m.text,`[语音转文字] ${spoken.text}`].filter(Boolean).join('\n');
-          }
-          if(raw.imageAvailable===true){
+        if(m.role==='user'&&!this.state(chatId).messages[digest(m.id)]&&raw.voiceAvailable===true){
+          const spoken=await this.driver.call('transcribe',{targetId:chatId,sourceKey:raw.sourceKey});
+          requireValue(spoken.status==='ok'&&typeof spoken.text==='string','VOICE_TRANSCRIPTION_UNAVAILABLE');
+          m.text=[m.text,`[语音转文字] ${spoken.text}`].filter(Boolean).join('\n');
+        }
+        if(m.role==='user'&&raw.voiceAvailable!==true&&raw.imageAvailable!==true&&raw.fileAvailable!==true&&raw.attachmentAvailable!==true&&(!raw.media||Array.isArray(raw.media)&&raw.media.length===0)&&m.media.length===0)this.#driverMessages.add(m);
+        candidates.push(m);rawByMessage.set(m,raw);
+      }
+      const gate=chat.mode==='group'?this.capabilities.groupImagePreflights?.get(chatId):null;
+      const prepared=gate?await gate.preflight({chatId,messages:candidates}):null;
+      const enriched=prepared?prepared.messages:candidates;
+      for(const m of enriched){
+        const raw=rawByMessage.get(m);requireValue(raw,'NATIVE_READ_MESSAGE_CHANGED');
+        if(m.role!=='user'||this.state(chatId).messages[digest(m.id)])continue;
+        if(raw.imageAvailable===true){
+          if(chat.mode==='group'&&!gate){this.#imageRefusals.set(m,Object.freeze({status:'unavailable',pixelsDelivered:false,code:'IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED'}));continue;}
+          if(prepared&&!gate.claimImage(prepared.ticket,m)){this.#imageRefusals.set(m,Object.freeze({status:'unavailable',pixelsDelivered:false,code:'GROUP_IMAGE_NOT_ROUTED'}));continue;}
             try{
               requireValue(this.imageInput,'IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED');
-              const ticket=await this.imageInput.prepare({chatId,message:raw,read:r});
+              const ticket=await this.imageInput.prepare({chatId,message:raw,read:r,...(prepared?{groupPreflight:{gate,ticket:prepared.ticket,message:m}}:{})});
               this.#imageTickets.set(m,ticket);
             }catch(error){
               // Only code-owned permanent type refusals become an explicit
@@ -242,11 +253,8 @@ export class WeChatCore {
               this.#imageRefusals.set(m,Object.freeze({status:'unavailable',pixelsDelivered:false,code}));
             }
           }
-        }
-        if(m.role==='user'&&raw.voiceAvailable!==true&&raw.imageAvailable!==true&&raw.fileAvailable!==true&&raw.attachmentAvailable!==true&&(!raw.media||Array.isArray(raw.media)&&raw.media.length===0)&&m.media.length===0)this.#driverMessages.add(m);
-        enriched.push(m);
       }
-      receipt=await this.ingest({chatId,messages:enriched});receipt.ackable.push(...rejectedAck);
+      receipt=await this.ingest({chatId,messages:enriched,...(prepared?{preflightTicket:prepared.ticket}:{})});receipt.ackable.push(...rejectedAck);
     }
     // The driver keeps the row until both native session and bridge receipt are durable.
     if(receipt.ackable.length&&this.driver.supportsAck===true){

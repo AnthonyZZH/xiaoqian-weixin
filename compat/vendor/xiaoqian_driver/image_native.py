@@ -43,6 +43,7 @@ class NativeImageBroker:
             adapter=self.backend._load(chat)
             profile=getattr(self.backend,'_native_image_profile',None)
             if profile is None:profile=getattr(self.backend.module,'NATIVE_IMAGE_PROFILE',None)
+            if profile is not None:profile={**profile,'groupChatKeys':sorted(getattr(self.backend,'_group_image_keys',set()))}
             if profile is not None and self.surface is None:
                 from .native_image_surface import NativeUIASurface,NativeRowImageSurface
                 surface_type=NativeRowImageSurface if profile.get('boundaryMode') in ('pure-photo-row/v1','photo-sticker-row/v2') else NativeUIASurface
@@ -102,7 +103,7 @@ class NativeImageBroker:
                 entry.update(proof=proof,deferred=False,state='ready')
             except Exception as error:
                 code=getattr(error,'code',None)
-                raise ImageError(code if isinstance(code,str) and re.fullmatch(r'[A-Z0-9_]{1,100}',code) else 'IMAGE_MEASUREMENT_CAPTURE_UNKNOWN') from None
+                raise ImageError('IMAGE_MEASUREMENT_CAPTURE_UNKNOWN') from None
         state=entry['proof'].state
         data={'schema':'xq.native-image/v1','ticket':entry['ticket'],'readId':self.read_id,'generation':self.generation,
               'sourceKey':raw_key,'messageId':entry['canonical'],'expiresAt':entry['expiresAt'],

@@ -24,13 +24,16 @@ PURE_CLASS = 'mmui::ChatImageItemView'
 PURE_LABELS = frozenset(('图片', '[图片]', 'Photo', '[Photo]', 'Image', '[Image]'))
 
 
-def pure_photo_row(klass, name, *, private, incoming, allow_static_sticker=False):
-    require(private is True and incoming is True, 'IMAGE_OWNER_PRIVATE_INCOMING_REQUIRED')
+def pure_photo_row(klass, name, *, private, incoming, allow_static_sticker=False, authorized_group=False, allow_refer_photo=False):
+    require((private is True or authorized_group is True) and incoming is True, 'IMAGE_OWNER_PRIVATE_INCOMING_REQUIRED')
     # This exact native class/label pair is present in the retained real r7
     # screenshot, not inferred from the word Refer. It is a single static frame.
-    if allow_static_sticker and klass == 'mmui::ChatBubbleReferItemView':
-        require(isinstance(name, str) and name.strip() == '\u52a8\u753b\u8868\u60c5', 'IMAGE_PURE_NATIVE_LABEL_REQUIRED')
-        return 'animated_sticker_static_frame'
+    if allow_static_sticker and klass=='mmui::ChatBubbleReferItemView':
+        label=name.strip() if isinstance(name,str) else None
+        require(label=='\u52a8\u753b\u8868\u60c5' or allow_refer_photo and label in PURE_LABELS,'IMAGE_PURE_NATIVE_LABEL_REQUIRED')
+        return 'animated_sticker_static_frame' if label=='\u52a8\u753b\u8868\u60c5' else 'photo_static_frame'
+    if allow_refer_photo and klass=='mmui::ChatBubbleReferItemView' and isinstance(name,str) and name.strip() in PURE_LABELS:
+        return 'photo_static_frame'
     # The r4 cat itself used ChatBubbleReferItemView. A missing accepted
     # boundary profile does not establish mixed content or prohibit stickers.
     require(klass == PURE_CLASS, 'IMAGE_ROW_BOUNDARY_UNVERIFIED')

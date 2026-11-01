@@ -58,7 +58,7 @@ class Tests(unittest.TestCase):
   f=fixture();backend=f.surface.backend;backend._load=lambda chat:f.adapter;backend._native_image_profile=f.profile
   broker=NativeImageBroker(backend,7,mode='real')
   with patch('xiaoqian_driver.native_image_surface.NativeRowImageSurface',return_value=f.surface) as constructor:
-   broker.before_read(f.chat);constructor.assert_called_once_with(backend,f.profile)
+    broker.before_read(f.chat);constructor.assert_called_once_with(backend,{**f.profile,'groupChatKeys':[]})
   self.assertIs(broker.surface,f.surface);self.assertTrue(f.adapter.native_image_enabled)
  def test_canonical_alias_is_resolved_from_current_observation_not_rehashed_raw_key(self):
   chat=Chat('SYNTHETIC OWNER');mid=digest([chat.key,'ordered-canonical'])
@@ -93,7 +93,7 @@ class Tests(unittest.TestCase):
     client._submit('restart',{},5)
     with self.assertRaisesRegex(DriverError,'FRESH_READ_REQUIRED'):client.native_image_command(chat,'image_current',args)
    finally:client.close()
- def test_rpc_rejects_group_and_nonowner_before_driver_capture(self):
+ def test_rpc_only_admits_owner_private_or_single_explicit_group(self):
   from unittest.mock import patch
   source=ROOT/'compat/driver/bridge_rpc.py'
   calls=[]
@@ -106,9 +106,10 @@ class Tests(unittest.TestCase):
    def from_legacy(value):return value
   fakeMedia=types.ModuleType('xiaoqian_media');fakeMedia.MediaLibrary=lambda *a,**kw:object()
   fakeSchedule=types.ModuleType('owner_wake_policy');fakeSchedule.ScheduleConfig=Schedule;fakeSchedule.Scheduler=lambda *a:object()
-  for owner,mode,enabled,expected in [(True,'group',True,'OWNER_IMAGE_REQUIRED'),(False,'private',True,'OWNER_IMAGE_REQUIRED'),(True,'private',False,'STATIC_CAPTURE_NOT_ENABLED')]:
+  for owner,mode,enabled,groups,expected in [(True,'group',True,[],'IMAGE_CHAT_NOT_AUTHORIZED'),(False,'private',True,[],'IMAGE_CHAT_NOT_AUTHORIZED'),(True,'private',False,[],'STATIC_CAPTURE_NOT_ENABLED'),(False,'group',True,[],'IMAGE_CHAT_NOT_AUTHORIZED'),(False,'group',True,['test'],'NATIVE_IMAGE'),(True,'private',True,[],'NATIVE_IMAGE')]:
+   calls.clear()
    config={'mode':'fake','state_dir':str(ROOT/'tests'),'media_root':str(ROOT/'tests'),'schedule_path':'synthetic',
-     'media_allow_static_capture':enabled,'chats':[{'id':'test','title':'SYNTHETIC','mode':mode,'owner':owner}]}
+     'media_allow_static_capture':enabled,'group_image_ids':groups,'chats':[{'id':'test','title':'SYNTHETIC','mode':mode,'owner':owner}]}
    requests=[{'id':1,'operation':'initialize','args':{'config':config}},{'id':2,'operation':'image_capture','args':{'targetId':'test'}}]
    output=io.StringIO()
    with patch.dict(sys.modules,{'xiaoqian_media':fakeMedia,'owner_wake_policy':fakeSchedule}):
@@ -116,6 +117,6 @@ class Tests(unittest.TestCase):
     ns['DriverClient']=Client
     with patch.object(sys,'stdin',io.StringIO('\n'.join(map(json.dumps,requests)))),contextlib.redirect_stdout(output):ns['serve']()
    rows=[json.loads(line) for line in output.getvalue().splitlines()]
-   self.assertEqual(expected,rows[-1]['code']);self.assertEqual([],calls)
+   self.assertEqual(expected,rows[-1]['code']);self.assertEqual(1 if expected=='NATIVE_IMAGE' else 0,len(calls))
 
 if __name__=='__main__':unittest.main(verbosity=2)

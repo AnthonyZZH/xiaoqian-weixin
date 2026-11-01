@@ -27,7 +27,7 @@ class StickerProfile(unittest.TestCase):
         sentinel=object()
         with patch('xiaoqian_driver.native_image_surface.NativeRowImageSurface',return_value=sentinel) as ctor:
             broker=NativeImageBroker(backend,1,mode='real');broker.before_read(chat)
-            ctor.assert_called_once_with(backend,profile);self.assertIs(sentinel,broker.surface);self.assertTrue(adapter.native_image_enabled)
+            ctor.assert_called_once_with(backend,{**profile,'groupChatKeys':[]});self.assertNotIn('groupChatKeys',profile);self.assertIs(sentinel,broker.surface);self.assertTrue(adapter.native_image_enabled)
     def test_label_only_does_not_override_unaccepted_classes_or_layout(self):
         f=fixture();profile={**f.profile,'boundaryMode':'photo-sticker-row/v2','layoutRevision':'incoming-avatar64-content2of3/v2'}
         for klass in ('mmui::ChatVideoItemView','mmui::ChatTextItemView','mmui::ChatBubbleItemView'):

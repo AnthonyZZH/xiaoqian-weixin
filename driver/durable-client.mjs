@@ -88,6 +88,7 @@ export class DurableDriverClient {
       chats:[...this.targets.values()].map(c=>({id:c.id,title:c.title,mode:c.mode,owner:c.owner===true})),
       native_saved_files_enabled:this.options.nativeSavedFilesEnabled===true,
       native_saved_file_profile:this.options.nativeSavedFileProfile,
+      group_image_ids:this.options.groupImageIds||[],
       native_received_witnesses:this.options.nativeReceivedWitnesses||[],
       fake_options:this.options.mock||{},max_chars:this.options.maxChars||1000,
       command_timeout:Math.max(this.options.commandTimeout||5,this.options.nativeSavedFilesEnabled===true?14:0)};
