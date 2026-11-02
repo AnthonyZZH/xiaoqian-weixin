@@ -25,7 +25,8 @@
     "r11-group-text-gate-before-evidence-and-scoped-image-routing",
     "owner-retrieval-budget-and-handoff-size-guards",
     "numeric-only-shadow-r2-and-bounded-r3-projection",
-    "off-owner-rotation-execution-entry"
+    "off-owner-rotation-execution-entry",
+    "official-cny-pricing-refresh-and-internal-review-policy"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -124,8 +125,23 @@
     "automaticRotationEnabled": false,
     "realPaidSummaryAccepted": false,
     "realSessionSwitchAccepted": false,
-    "historicalTariffExpired": true,
     "privateRuntimeIncluded": false,
-    "wholeSnapshotDeploymentClaimed": false
+    "wholeSnapshotDeploymentClaimed": false,
+    "pricingSupersededBy": "pricingRefreshExport"
+  },
+  "pricingRefreshExport": {
+    "reviewedPublicBase": "2974330d12e4f9260fb45e39d7b7b6ca47f059a6",
+    "sourceManifest": "docs/PRICING-SOURCE.json",
+    "notes": "docs/PRICING.md",
+    "observedAt": "2026-11-02T04:56:39Z",
+    "pricesChanged": false,
+    "componentDeployed": true,
+    "officialTariffExpirationPublished": false,
+    "dailyReviewAdvisory": true,
+    "internalMaximumUnreviewedDays": 7,
+    "automaticRotationEnabled": false,
+    "realPaidSummaryAccepted": false,
+    "realSessionSwitchAccepted": false,
+    "privateRuntimeIncluded": false
   }
 }

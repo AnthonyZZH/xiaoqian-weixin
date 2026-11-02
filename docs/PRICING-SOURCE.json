@@ -1,0 +1,72 @@
+{
+  "revision": "official-cny-pricing-refresh-public-export/v1",
+  "reviewedPublicBase": "2974330d12e4f9260fb45e39d7b7b6ca47f059a6",
+  "notes": "docs/PRICING.md",
+  "observation": {
+    "at": "2026-11-02T04:56:39Z",
+    "sources": [
+      "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "https://api-docs.deepseek.com/zh-cn/guides/search/"
+    ],
+    "snapshotId": "b65156532a7e6432e538b46d1d459a690ecf276018ffbd7a43dcde470b955b10",
+    "pricesChanged": false,
+    "officialModelTariffStartPublished": false,
+    "officialModelTariffExpiryPublished": false,
+    "dailyReviewIsInternalAdvisory": true,
+    "maximumUnreviewedDaysIsInternal": 7
+  },
+  "sourceEvidence": {
+    "officialCandidateManifestMatched": true,
+    "deployedRecordContainsExactPricingSHA256": true,
+    "wholeRepositoryDeploymentClaimed": false,
+    "usageImplementationUnchanged": true,
+    "sourceSHA256": [
+      {
+        "path": "src/rotation-observer/calculator/pricing.py",
+        "sha256": "a1c8767ea2dec4a74bdc4d7e76f4ae19991160bb1b6d0fe949e042e6ad697003"
+      },
+      {
+        "path": "src/rotation-observer/calculator/official-cny-snapshot.json",
+        "sha256": "de67be7d5059e22886d74e32e285ff78f0e458023f26296b5b2f8ea49c35a595"
+      },
+      {
+        "path": "src/rotation-observer/calculator/test_pricing.py",
+        "sha256": "c62f2b5358bfbad723a46c269afdc95cd97cf40dbd0c81b5815a9438d5c35293"
+      }
+    ]
+  },
+  "validation": {
+    "pricingTests": 9,
+    "syntheticIntegrationTests": 5,
+    "failed": 0,
+    "snapshotQuoteMetadataMatch": true,
+    "changedJavaScriptAndPythonSyntax": "passed",
+    "publicContentHighSignalPrivacyScanFindings": 0,
+    "fullNodeSuiteRerun": false,
+    "remoteCIRun": false,
+    "serverSDKSuiteRerun": false,
+    "realModelOrToolAPICalls": 0
+  },
+  "scope": {
+    "productionChangedByPublication": false,
+    "newLocalRepositoryCreated": false,
+    "privateRuntimeDataIncluded": false,
+    "rehearsalDataIncluded": false,
+    "automaticRotationEnabled": false,
+    "realPaidSummaryAccepted": false,
+    "realSessionSwitchAccepted": false,
+    "automaticFileReceiveStillCandidate": true
+  },
+  "changedFiles": [
+    "README.md",
+    "docs/RETRIEVAL-AND-ROTATION.md",
+    "SOURCE.json",
+    "src/rotation-observer/calculator.test.mjs",
+    "src/rotation-observer/public-numeric.test.mjs",
+    "src/rotation-observer/calculator/pricing.py",
+    "src/rotation-observer/calculator/official-cny-snapshot.json",
+    "src/rotation-observer/calculator/test_pricing.py",
+    "src/rotation-observer/calculator/test_pricing_integration.py",
+    "docs/PRICING.md"
+  ]
+}

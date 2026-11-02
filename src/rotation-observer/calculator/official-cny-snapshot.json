@@ -1,0 +1,132 @@
+{
+  "schema": "xq.deepseek.official-cny-snapshot/v1",
+  "retrieved_at": "2026-11-02T04:56:39Z",
+  "source_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "search_rule_source": "https://api-docs.deepseek.com/zh-cn/guides/search/",
+  "tool_announcement_source": "https://api-docs.deepseek.com/zh-cn/news/news261017/",
+  "snapshot_id": "b65156532a7e6432e538b46d1d459a690ecf276018ffbd7a43dcde470b955b10",
+  "currency": "CNY",
+  "models": {
+    "deepseek-flash": {
+      "tariff_id": "deepseek-official:deepseek-flash:CNY:b65156532a7e6432e538b46d1d459a690ecf276018ffbd7a43dcde470b955b10",
+      "snapshot_id": "b65156532a7e6432e538b46d1d459a690ecf276018ffbd7a43dcde470b955b10",
+      "route_id": "deepseek-official/deepseek-flash",
+      "model": "deepseek-flash",
+      "model_revision": "DeepSeek-V4.1-Flash-1017",
+      "currency": "CNY",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "verified_on": "2026-11-02",
+      "verified_at": "2026-11-02T04:56:39Z",
+      "effective_from": "2026-11-02T04:56:39Z",
+      "effective_from_basis": "observed-current-quote-only-not-official-start-date",
+      "official_effective_from": null,
+      "official_valid_until": null,
+      "review_due_at": "2026-11-03T04:56:39+00:00",
+      "local_review_deadline": "2026-11-09T04:56:39+00:00",
+      "expiry_basis": "internal-max-unreviewed-age-not-official-expiration",
+      "rates": {
+        "offpeak": {
+          "hit": "0.02",
+          "miss": "1",
+          "output": "4"
+        },
+        "peak": {
+          "hit": "0.04",
+          "miss": "2",
+          "output": "8"
+        }
+      },
+      "unit": "CNY per 1000000 tokens",
+      "context_upper": 1048576,
+      "output_upper": 393216
+    },
+    "deepseek-v4-pro": {
+      "tariff_id": "deepseek-official:deepseek-v4-pro:CNY:b65156532a7e6432e538b46d1d459a690ecf276018ffbd7a43dcde470b955b10",
+      "snapshot_id": "b65156532a7e6432e538b46d1d459a690ecf276018ffbd7a43dcde470b955b10",
+      "route_id": "deepseek-official/deepseek-v4-pro",
+      "model": "deepseek-v4-pro",
+      "model_revision": "DeepSeek-V4-Pro-0813",
+      "currency": "CNY",
+      "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+      "verified_on": "2026-11-02",
+      "verified_at": "2026-11-02T04:56:39Z",
+      "effective_from": "2026-11-02T04:56:39Z",
+      "effective_from_basis": "observed-current-quote-only-not-official-start-date",
+      "official_effective_from": null,
+      "official_valid_until": null,
+      "review_due_at": "2026-11-03T04:56:39+00:00",
+      "local_review_deadline": "2026-11-09T04:56:39+00:00",
+      "expiry_basis": "internal-max-unreviewed-age-not-official-expiration",
+      "rates": {
+        "offpeak": {
+          "hit": "0.15",
+          "miss": "4.5",
+          "output": "13.5"
+        },
+        "peak": {
+          "hit": "0.30",
+          "miss": "9.0",
+          "output": "27.0"
+        }
+      },
+      "unit": "CNY per 1000000 tokens",
+      "context_upper": 1048576,
+      "output_upper": 393216
+    }
+  },
+  "band_policy": {
+    "timezone": "Asia/Shanghai",
+    "peak_weekdays": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "peak_intervals_local": [
+      [
+        "09:00",
+        "12:00"
+      ],
+      [
+        "14:00",
+        "18:00"
+      ]
+    ],
+    "exclude_cn_statutory_holidays": true,
+    "remaining_times": "offpeak",
+    "unknown_calendar": "preserve unknown band or full offpeak..peak bounds; never silently infer peak/offpeak"
+  },
+  "web_tools": {
+    "search": {
+      "unit": "successful_nonempty_http_200_request",
+      "cny_per_request": "0.005"
+    },
+    "fetch": {
+      "unit": "http_200_request_with_page_content",
+      "cny_per_request": "0.005"
+    },
+    "server_tool_billing_effective_at": "2026-11-01T00:00:00+08:00",
+    "server_tool_billing_effective_utc": "2026-10-31T16:00:00Z",
+    "direct_api_current_price_cny_per_success": "0.005",
+    "direct_api_historical_free_period_asserted": false,
+    "local_library_mcp_operations_are_these_apis": false
+  },
+  "review_policy": {
+    "daily_review_advisory": true,
+    "local_max_unreviewed_days": 7,
+    "official_expiration_published": false,
+    "official_model_tariff_start_published_on_current_page": false,
+    "revalidate_on": [
+      "daily advisory",
+      "model or provider or currency or tariff change",
+      "official price/band/tool-rule content change"
+    ],
+    "failed_or_ambiguous_recheck": "do not refresh observation; unknown tariff skips rotation only"
+  },
+  "tests": {
+    "passed": 9,
+    "paid_calls": 0,
+    "production_changes": 0
+  }
+}

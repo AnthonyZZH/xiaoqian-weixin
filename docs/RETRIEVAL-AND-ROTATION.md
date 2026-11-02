@@ -26,7 +26,7 @@
 
 宿主从显式已配置会话中选择唯一 owner，不使用部署专用 owner ID。原先写在源码旁的状态改写至 stateRoot；计算器从模块目录加载。原 source-bound 库策略证明和任何真实 usage/身份哈希均未发布。
 
-`calculator/pricing.py` 是该次已确认的历史价卡，verified_on 为 2026-10-31，严格有效期到 2026-11-02 之前；过期返回 `QUOTE_STALE_REVALIDATE_OFFICIAL_SOURCE`，不自动联网刷新。正在修改的价卡未合入。文档不把历史金额表作为当前报价；重新启用前须完成独立价卡核对与验收。
+`calculator/pricing.py` 已同步 2026-11-02T04:56:39Z 核对的官方 CNY 快照，替代旧内部两天 TTL。`review_due_at` 是每日复核提示；`local_review_deadline` 是七天最大未复核窗口，到期返回 `QUOTE_LOCAL_REVIEW_OVERDUE`，两者都不是官方报价有效期。官方模型价格起始日及到期日未在当前页面给出，相关字段为 null；观察时间不能倒填为官方生效时间。单价未变。Search/Fetch 与模型 token 分项计价，本地主库 MCP 不冒充 Search/Fetch 成功调用。详见 [价卡与计费边界](PRICING.md)。刷新价卡不启用轮换。
 
 ## 轮换执行入口与失败处理
 
@@ -49,4 +49,4 @@ $env:XQ_TEST_PYTHON = 'C:\Path\To\python.exe'
 node --test src/rotation-observer/*.test.mjs src/rotation-execution/*.test.mjs tests/rotation-interface.test.mjs
 ```
 
-测试涵盖片段预算/校验和分页/原文保留、handoff 创建前拒绝、OFF 身份与原生 wrapper 保持、数字元数据采样、活跃投影缓存、历史价卡过期拒绝、最终 wire 不匹配在网络前拒绝、重试与提交后隔离边界。未调用真实模型或 UI；远端 CI 与服务器 SDK 原测试未在本次重新运行。文件自动接收仍为 r10 候选，新图片自然识别仍未验收。
+测试涵盖片段预算/校验和分页/原文保留、handoff 创建前拒绝、OFF 身份与原生 wrapper 保持、数字元数据采样、活跃投影缓存、内部价卡未复核窗口与观察时间边界、最终 wire 不匹配在网络前拒绝、重试与提交后隔离边界。未调用真实模型或 UI；远端 CI 与服务器 SDK 原测试未在本次重新运行。文件自动接收仍为 r10 候选，新图片自然识别仍未验收。
