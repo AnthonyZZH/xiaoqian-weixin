@@ -8,3 +8,5 @@ This source publication is based on the Xiaoqian Harness-native integration at t
 - A license attached to an upstream QQ subplugin does not license that repository's other code. This publication does not include that QQ implementation.
 
 No new root license is asserted here. Public repository visibility alone does not grant a blanket right to reuse code whose rights are not specified. Obtain any additional permission required by the relevant rights holder.
+
+The rotation component source includes pinned pure rendering helper extracts from the reviewed Harness SDK integration. This does not redistribute the SDK installation or change upstream rights; preserve applicable upstream attribution and terms when using those helpers.

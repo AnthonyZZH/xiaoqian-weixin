@@ -22,7 +22,10 @@
     "native-image-read-binding-and-static-sticker-frames",
     "shared-owner-attachment-registry-and-local-pdf-parser",
     "r10-native-file-receive-candidate-disabled",
-    "r11-group-text-gate-before-evidence-and-scoped-image-routing"
+    "r11-group-text-gate-before-evidence-and-scoped-image-routing",
+    "owner-retrieval-budget-and-handoff-size-guards",
+    "numeric-only-shadow-r2-and-bounded-r3-projection",
+    "off-owner-rotation-execution-entry"
   ],
   "ownerAnchorRecovery": {
     "version": "certified-live-edge-v1",
@@ -110,5 +113,19 @@
     "wholeSnapshotDeploymentClaimed": false,
     "privateRuntimeIncluded": false,
     "privateOperationsIncluded": false
+  },
+  "retrievalRotationExport": {
+    "reviewedPublicBase": "7e37485319e4c0018502229f6ebefdc5e7cc7d96",
+    "sourceManifest": "docs/RETRIEVAL-ROTATION-SOURCE.json",
+    "notes": "docs/RETRIEVAL-AND-ROTATION.md",
+    "retrievalBudgetComponentDeployed": true,
+    "numericShadowDeployed": true,
+    "executionEntryDeployed": true,
+    "automaticRotationEnabled": false,
+    "realPaidSummaryAccepted": false,
+    "realSessionSwitchAccepted": false,
+    "historicalTariffExpired": true,
+    "privateRuntimeIncluded": false,
+    "wholeSnapshotDeploymentClaimed": false
   }
 }

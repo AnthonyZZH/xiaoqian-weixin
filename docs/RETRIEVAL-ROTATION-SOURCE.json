@@ -1,0 +1,372 @@
+{
+  "revision": "retrieval-numeric-shadow-off-execution-public-export/v1",
+  "reviewedPublicBase": "7e37485319e4c0018502229f6ebefdc5e7cc7d96",
+  "notes": "docs/RETRIEVAL-AND-ROTATION.md",
+  "correspondence": {
+    "scope": "Confirmed retrieval budget, existing r2 numeric sampler with deployed R3 projection, and OFF execution entry; excludes concurrent tariff/acceptance changes",
+    "sourceModulesMatched": 22,
+    "executionRuntimeHashMatchedToDeploymentRecord": true,
+    "recordedComponentStatus": {
+      "recordedExecutionAt": "2026-11-02T04:50:23.6604730Z",
+      "recordedRetrievalAt": "2026-11-01T22:33:17.1224912Z",
+      "executionAutoEnabled": false,
+      "executionProducerAttached": true,
+      "executionModelProbes": 0,
+      "numericAutoEnabled": false,
+      "retrievalEnforced": true,
+      "handoffGuardInstalled": true
+    },
+    "r2SamplerMatchesDeployedRetrievalSampler": true,
+    "wholeSnapshotDeploymentClaimed": false
+  },
+  "status": {
+    "automaticRotationEnabled": false,
+    "realPaidSummaryAccepted": false,
+    "realSessionSwitchAccepted": false,
+    "automaticFileReceiveStillCandidate": true,
+    "newNaturalImageRecognitionStillPending": true,
+    "publicHistoricalTariffExpired": true,
+    "productionChangedByThisPublication": false
+  },
+  "privacy": {
+    "realUsageOrCalibrationSeedsIncluded": false,
+    "realChatOrPersonaIncluded": false,
+    "imagesIncluded": false,
+    "privateDeploymentPathsIncluded": false,
+    "privateOperationsIncluded": false,
+    "proofArtifactsIncluded": false
+  },
+  "adaptations": [
+    "retain public r11 core, explicit owner and configured-group policies and r10 file candidate unchanged",
+    "remove fixed deployment owner ID; require explicit owner scope",
+    "replace private seeds, observed library policy and source-cap files with trusted host parameters; no default calibration records",
+    "write observer state only under explicit absolute stateRoot; keep calculator source separate",
+    "keep confirmed historical pricing snapshot, fail closed after expiration; do not incorporate unconfirmed tariff updates",
+    "restore optional search definition only when present during disposal",
+    "exclude unused pure SDK value helpers and private SDK-dependent tests; retain required pinned rendering helper",
+    "public runtime test uses synthetic session metadata and real public host modules; wire tests use synthetic final payloads, not an SDK serializer claim"
+  ],
+  "validation": {
+    "new-components": {
+      "exitCode": 0,
+      "summary": [
+        "# tests 34",
+        "# pass 34",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    "native-owner-regression": {
+      "exitCode": 0,
+      "summary": [
+        "# tests 28",
+        "# pass 28",
+        "# fail 0",
+        "# skipped 0"
+      ]
+    },
+    "python-native": {
+      "exitCode": 0,
+      "summary": [
+        "Ran 58 tests in 6.432s\r",
+        "OK\r"
+      ]
+    },
+    "owner-recovery": {
+      "exitCode": 0,
+      "summary": [
+        "Ran 12 tests in 0.436s\r",
+        "OK\r"
+      ]
+    },
+    "configured-owner-group": {
+      "exitCode": 0,
+      "summary": [
+        "PASS: configured private/group receipts, cross-chat denial, digest binding, unconfigured target rejection; no UI or model calls\r"
+      ]
+    },
+    "project-check": {
+      "exitCode": 0,
+      "summary": []
+    },
+    "python-source-syntax": {
+      "exitCode": 0,
+      "summary": []
+    },
+    "whitespace": {
+      "exitCode": 0,
+      "summary": []
+    },
+    "sourceScan": {
+      "files": 35,
+      "findings": 0,
+      "missingRelativeImports": 0,
+      "checkedJSModules": 24
+    },
+    "notRun": {
+      "remoteCI": "not run",
+      "serverInstalledSDKIntegration": "not rerun; private host-input SDK fixtures excluded",
+      "realPaidSummary": "not run",
+      "realSessionSwitch": "not run",
+      "projectLintAndTypecheck": "no configured lint/typecheck"
+    },
+    "serverOriginalOfflineChecks": 26,
+    "serverOriginalOfflineChecksRerunHere": false,
+    "totalCountedCases": 132,
+    "realModelOrUIActions": false
+  },
+  "confirmedSourceModules": [
+    {
+      "component": "retrieval-budget-r1",
+      "module": "retrieval-budget.mjs",
+      "sha256": "8250fd1e9b4729e61f8c786084e9c980c8da8120dfd671be1ab63163e6efe8c7"
+    },
+    {
+      "component": "retrieval-budget-r1",
+      "module": "retrieval-runtime.mjs",
+      "sha256": "1cc3c83d0088bbd1d696506d55685fef8f2bae59c5d0e763a5cd018cc8b5a924"
+    },
+    {
+      "component": "retrieval-budget-r1",
+      "module": "numeric-shadow-r3.mjs",
+      "sha256": "6d17a215f56b1ea141f963cdc13df81d11a14498fd926bb9b10ba462cdb7d7f9"
+    },
+    {
+      "component": "retrieval-budget-r1",
+      "module": "live-projection-r3.mjs",
+      "sha256": "85e79e84a2093092305bedf90f6c700d26e29705cced325f204ececc1f32172d"
+    },
+    {
+      "component": "retrieval-budget-r1",
+      "module": "live-advisor.mjs",
+      "sha256": "d41e3fa26b3ab0acc3c8b66cd05dbb5ddd54d84a6a00e7c31f254923eab02957"
+    },
+    {
+      "component": "retrieval-budget-r1",
+      "module": "numeric-sampler-r2.mjs",
+      "sha256": "0b4ec944a54a480f309cc5cfe1cd7d4801e608e2e167668c262a452af069b3b2"
+    },
+    {
+      "component": "retrieval-budget-r1",
+      "module": "calculator/live_shadow.py",
+      "sha256": "c10e5c7a144be3a69276baf20ce2025860cc0eb4731351398f091709037f869e"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "runtime.mjs",
+      "sha256": "fa2c72c75173fcba72c507f2e61d836dc6b594500d955cb421aa019221803866"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "execution.mjs",
+      "sha256": "662df8e99f19975f2963ad2a113c4bf7c1331f5871b5a9de2c2999e89ebeed01"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "host-binding.mjs",
+      "sha256": "70d068006fda29d21544f28a983600ec605dc6290007e40870a3d59279d44e45"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "ingress-binding.mjs",
+      "sha256": "481ac1677340bfee73e9d1ce97c564029fad394863cb4093e764e408fda043b5"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "wire-guards.mjs",
+      "sha256": "8de3ce710c2e102da9d43ecc9b50007fa729a61c1d5786fc01896d640c7e4867"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "pending.mjs",
+      "sha256": "2899e412bb2e4f9b9f1210950a18b5f722cb702350a2f8b98a4cf2d8a3046ac2"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "execution-rpc.mjs",
+      "sha256": "9626a36846cb34a866752382c44ca8710f079433c052b9574b7ca735987c688d"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "execution-worker.py",
+      "sha256": "2d6a3604cd768545d50b33f050e05d74cff6f2d770f71d41ed0df015561c15a4"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "rotation-summary-projection.mjs",
+      "sha256": "8b61b700d9a88d45c419b46cf99f2d0c3e3a32e59a3927f1173d35c9be62581c"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "native-render.mjs",
+      "sha256": "c7f6e0c03f1b68cb98e93aec6d0ea7d6c63b32ad7fa8a4666b744e2b75be9b4b"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "native-values.mjs",
+      "sha256": "895f6fddbc059d02ceb95679b7cacf8bbd5dbe8f6609dbf8c7ced57038362f0d"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "live-advisor.mjs",
+      "sha256": "d41e3fa26b3ab0acc3c8b66cd05dbb5ddd54d84a6a00e7c31f254923eab02957"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "vendor/session-rotation/xq_session_rotation/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "vendor/session-rotation/xq_session_rotation/cost.py",
+      "sha256": "984f7cb167802726cb2b817022a1a4233a662354a72407d4a6ac19c9dced6674"
+    },
+    {
+      "component": "rotation-execution-r1",
+      "module": "vendor/session-rotation/xq_session_rotation/rotation.py",
+      "sha256": "7c4d781100fc441d7e82ecb6c8414c7d6b71fa4fe3e18e15eba2774d42d37fdb"
+    }
+  ],
+  "files": [
+    {
+      "path": "NOTICE.md",
+      "sha256": "301bdf1646d726ca415ac80207af6771a928931d4e6f62eeb6b331d15548b0e4"
+    },
+    {
+      "path": "README.md",
+      "sha256": "90477d43f7057af73b949b04339bc122ade5a11a8927001afa8f933c5701139e"
+    },
+    {
+      "path": "SOURCE.json",
+      "sha256": "bc02e97a36b2ca907375e6a4d92e09281b3c2d9357c34980aac9093818586b72"
+    },
+    {
+      "path": "docs/RETRIEVAL-AND-ROTATION.md",
+      "sha256": "c6879083843b091cc00e6ccb04942f1632fad74eb338740edb98f269d7acb723"
+    },
+    {
+      "path": "src/rotation-execution/containment.test.mjs",
+      "sha256": "edfcc19f5405e038f087ce5035921289909ceac3b24c7ce76c7347a3efd0beb9"
+    },
+    {
+      "path": "src/rotation-execution/execution-rpc.mjs",
+      "sha256": "b839684a8df07997d1e6727fd1b015925b387818a53cf9518d5704d4a7814368"
+    },
+    {
+      "path": "src/rotation-execution/execution-worker.py",
+      "sha256": "9f9bf711a4a9575609c0862518e5063e521260db3d7d10364a533cbce5104c2a"
+    },
+    {
+      "path": "src/rotation-execution/execution.mjs",
+      "sha256": "662df8e99f19975f2963ad2a113c4bf7c1331f5871b5a9de2c2999e89ebeed01"
+    },
+    {
+      "path": "src/rotation-execution/host-binding.mjs",
+      "sha256": "70d068006fda29d21544f28a983600ec605dc6290007e40870a3d59279d44e45"
+    },
+    {
+      "path": "src/rotation-execution/ingress-binding.mjs",
+      "sha256": "481ac1677340bfee73e9d1ce97c564029fad394863cb4093e764e408fda043b5"
+    },
+    {
+      "path": "src/rotation-execution/live-advisor.mjs",
+      "sha256": "d41e3fa26b3ab0acc3c8b66cd05dbb5ddd54d84a6a00e7c31f254923eab02957"
+    },
+    {
+      "path": "src/rotation-execution/native-render.mjs",
+      "sha256": "db9a48a3e50f65a11e4b858611d371d0381005b0d1bdaf9b3198ca772d6ff1da"
+    },
+    {
+      "path": "src/rotation-execution/pending.mjs",
+      "sha256": "2899e412bb2e4f9b9f1210950a18b5f722cb702350a2f8b98a4cf2d8a3046ac2"
+    },
+    {
+      "path": "src/rotation-execution/pending.test.mjs",
+      "sha256": "4486bad9c8f5159f2e0d71c156fd6bb7e31abf8799fa64b87da6cc3a93b6c22f"
+    },
+    {
+      "path": "src/rotation-execution/public-guards.test.mjs",
+      "sha256": "c85f084dd16af71de24e517099fff03ef693070c54f3ccc54bff7f5c43c1cc2b"
+    },
+    {
+      "path": "src/rotation-execution/rotation-summary-projection.mjs",
+      "sha256": "8b61b700d9a88d45c419b46cf99f2d0c3e3a32e59a3927f1173d35c9be62581c"
+    },
+    {
+      "path": "src/rotation-execution/runtime.mjs",
+      "sha256": "fa2c72c75173fcba72c507f2e61d836dc6b594500d955cb421aa019221803866"
+    },
+    {
+      "path": "src/rotation-execution/runtime.test.mjs",
+      "sha256": "f6da07a959c2ba13b096e00c2792788a1b70ed853a1e99e1eda3fca75cc9b192"
+    },
+    {
+      "path": "src/rotation-execution/vendor/session-rotation/xq_session_rotation/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "src/rotation-execution/vendor/session-rotation/xq_session_rotation/cost.py",
+      "sha256": "6aa2f4b4fae9a5a48bd7bcfeddbd2b680d8d1e6b867214ea0bb05f2e77136ac3"
+    },
+    {
+      "path": "src/rotation-execution/vendor/session-rotation/xq_session_rotation/rotation.py",
+      "sha256": "1dbaabe73daa2bdff04db9e4bef76ed1297139615185676562712e94aa6054f1"
+    },
+    {
+      "path": "src/rotation-execution/wire-guards.mjs",
+      "sha256": "8de3ce710c2e102da9d43ecc9b50007fa729a61c1d5786fc01896d640c7e4867"
+    },
+    {
+      "path": "src/rotation-observer/calculator.test.mjs",
+      "sha256": "c379785fd2e9fe35abf895891f4560c3645a6cd0d7dc5da4e05771636aa9ba36"
+    },
+    {
+      "path": "src/rotation-observer/calculator/live_shadow.py",
+      "sha256": "c10e5c7a144be3a69276baf20ce2025860cc0eb4731351398f091709037f869e"
+    },
+    {
+      "path": "src/rotation-observer/calculator/pricing.py",
+      "sha256": "863bf87b48ec8d0f20bbc47618276a3917516b73b254a2c202ba74cd1de5f638"
+    },
+    {
+      "path": "src/rotation-observer/calculator/usage.py",
+      "sha256": "ff843e11a2a527aff582db8e32a2aacd500c65f8992ac9f71fb97f65eeb8455d"
+    },
+    {
+      "path": "src/rotation-observer/live-advisor.mjs",
+      "sha256": "d41e3fa26b3ab0acc3c8b66cd05dbb5ddd54d84a6a00e7c31f254923eab02957"
+    },
+    {
+      "path": "src/rotation-observer/live-projection-r3.mjs",
+      "sha256": "a0219e9e9b35e19277bd9d79e6cb603a8b927164f26fb82c03bd0f52a816a7ac"
+    },
+    {
+      "path": "src/rotation-observer/numeric-sampler-r2.mjs",
+      "sha256": "d424e747c3f43b7a3511bee9b1e4c9686ea3d7ce3beef27d406dd85d870c0bbc"
+    },
+    {
+      "path": "src/rotation-observer/numeric-shadow-r3.mjs",
+      "sha256": "3b02eee2f09e198fe2ad0925ad05596cbecb9d8cf1bad3dfe4fb5c0a3cd9093d"
+    },
+    {
+      "path": "src/rotation-observer/public-numeric.test.mjs",
+      "sha256": "49d452e9c259ef5f8b3682363e6616e248f0b13f8c71608f5a585e9ea04a75a9"
+    },
+    {
+      "path": "src/rotation-observer/retrieval-budget.mjs",
+      "sha256": "8250fd1e9b4729e61f8c786084e9c980c8da8120dfd671be1ab63163e6efe8c7"
+    },
+    {
+      "path": "src/rotation-observer/retrieval-budget.test.mjs",
+      "sha256": "3b8964b5319f4349e38e8eb6f18da0c45d4a81c1e37e3d66f8a81c035a287193"
+    },
+    {
+      "path": "src/rotation-observer/retrieval-runtime.mjs",
+      "sha256": "78539d808ff02be1e965b6165ca30f32fe5a6f69e977af303fefedec6f411ecc"
+    },
+    {
+      "path": "src/rotation-observer/runtime.test.mjs",
+      "sha256": "8ff043de96e2b3820c890fb81d1d967718a828b1284c84f11e6b6ba72eac1d8f"
+    }
+  ]
+}
