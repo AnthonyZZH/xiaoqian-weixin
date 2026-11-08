@@ -47,7 +47,7 @@ export async function nativeOwnerShellOrigin({core,chatId,agent,callId,commandHa
   }catch{return null;}
 }
 
-export function createOwnerShellIntegration({config,getCore,isCurrentOwner}){
+export function createOwnerShellIntegration({config,getCore,isCurrentOwner,taskShellOrigin}){
   const entries=new Map(),probes=new Map();let executor=null,closed=false,timer,approvedChatId=null;
   const options=config.ownerShell;
   if(options?.enabled===true){
@@ -62,6 +62,7 @@ export function createOwnerShellIntegration({config,getCore,isCurrentOwner}){
           const entry=entries.get(agent);if(!entry||entry.bindingId!==bindingId||entry.chatId!==approval.ownerChatId)return null;
           const probe=probes.get(callId);
           if(probe&&probe.agent===agent&&probe.bindingId===bindingId&&probe.commandHash===commandHash&&probe.expires>Date.now())return {kind:'authenticated-owner-request',canExecuteHostShell:true,requestId:probe.requestId};
+          const task=taskShellOrigin?.({agent,bindingId,callId,commandHash});if(task)return task;
           return nativeOwnerShellOrigin({core:getCore(),chatId:entry.chatId,agent,callId,commandHash});
         }});
     }catch(error){

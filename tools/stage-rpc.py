@@ -1,9 +1,9 @@
 """Stage a source-only RPC with explicit runtime assets; never copies live state.
 
-Usage: stage-rpc.py RPC_SOURCE_ROOT POLICY_SNAPSHOT_ROOT NEW_DEST
+Usage: stage-rpc.py RPC_SOURCE_ROOT APP_VENDOR_ROOT NEW_DEST
        [--smoke-python ABSOLUTE_PYTHON]
-RPC_SOURCE_ROOT contains driver/ and vendor/. POLICY_SNAPSHOT_ROOT contains
-owner_wake_policy.py and its public calendar-2026.json. The optional smoke uses
+RPC_SOURCE_ROOT contains driver/ and vendor/. APP_VENDOR_ROOT must be the
+sibling app/vendor of NEW_DEST; RPC delegates to that canonical policy. The optional smoke uses
 the real staged JSONL process, synthetic state and a fake UI backend only.
 """
 import argparse,ast,hashlib,json,shutil,subprocess,tempfile
@@ -13,18 +13,19 @@ def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 def stage(source,policy,destination):
  source=Path(source).resolve(strict=True);policy=Path(policy).resolve(strict=True);destination=Path(destination).resolve()
  if destination.exists():raise ValueError('DESTINATION_ALREADY_EXISTS')
- required=[source/'driver/bridge_rpc.py',policy/'owner_wake_policy.py',policy/'calendar-2026.json']
+ if policy != destination.parent/'app/vendor':raise ValueError('CANONICAL_SIBLING_APP_VENDOR_REQUIRED')
+ shim=source.parent/'rpc/vendor/owner_wake_policy.py'
+ required=[source/'driver/bridge_rpc.py',policy/'owner_wake_policy.py',policy/'calendar-2026.json',policy/'xiaoqian_schedule/price-card.json',shim]
  if any(not p.is_file() or p.is_symlink() for p in required):raise ValueError('REQUIRED_RUNTIME_SOURCE_OR_ASSET_MISSING')
  calendar=json.loads(required[2].read_text(encoding='utf-8'))
  if not isinstance(calendar.get('verified_years'),list):raise ValueError('CALENDAR_CONTRACT_INVALID')
  destination.mkdir(parents=True)
  for folder in ['driver','vendor']:
   for p in (source/folder).rglob('*.py'):
-   if '__pycache__' in p.parts:continue
+   if '__pycache__' in p.parts or p == source/'vendor/owner_wake_policy.py':continue
    if p.is_symlink():raise ValueError('SOURCE_SYMLINK_DENIED')
    q=destination/p.relative_to(source);q.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,q)
- for name in ['owner_wake_policy.py','calendar-2026.json']:
-  (destination/'vendor').mkdir(exist_ok=True);shutil.copyfile(policy/name,destination/'vendor'/name)
+ shutil.copyfile(shim,destination/'vendor/owner_wake_policy.py')
  resources=[]
  for p in destination.rglob('*.py'):
   tree=ast.parse(p.read_text(encoding='utf-8-sig'))
@@ -32,7 +33,9 @@ def stage(source,policy,destination):
    if not (isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='with_name' and n.args and isinstance(n.args[0],ast.Constant) and isinstance(n.args[0].value,str)):continue
    if '__file__' not in ast.unparse(n.func.value):continue
    q=p.with_name(n.args[0].value)
-   if not q.is_file():raise ValueError('STATIC_RUNTIME_ASSET_MISSING')
+   asset=source/q.relative_to(destination)
+   if not asset.is_file() or asset.is_symlink():raise ValueError('STATIC_RUNTIME_ASSET_MISSING')
+   shutil.copyfile(asset,q)
    resources.append(q.relative_to(destination).as_posix())
  manifest={p.relative_to(destination).as_posix():digest(p) for p in destination.rglob('*') if p.is_file()}
  return {'files':manifest,'staticResources':sorted(set(resources))}

@@ -6,23 +6,18 @@ import {createAttachmentIngress} from '../vendor/attachment-ingress/attachment-i
 import {createSavedFileBroker} from '../vendor/attachment-ingress/saved-file-broker.mjs';
 
 // Host callbacks resolve native file IDs; model/config text cannot supply paths.
-export function createOwnerAttachmentHost({getCore,root,chats,savedHost,python,spoolDirectory='owner-attachment-spool'}={}) {
+export function createOwnerAttachmentHost({getCore,root,chats,savedHost,python,worker,isOwnerActive,spoolDirectory='owner-attachment-spool'}={}) {
  const owners=chats.filter(c=>c.owner===true&&c.mode==='private');
  requireValue(owners.length===1,'OWNER_ATTACHMENT_BINDING_REQUIRED');
  const owner=owners[0],binding=digest(JSON.stringify([owner.id,owner.title,owner.mode,owner.owner]));
  requireValue(typeof savedHost?.resolveSavedFile==='function'&&typeof savedHost?.verifyBinding==='function','SAVED_FILE_BINDING_REQUIRED');
- const isOwnerActive=()=>{
-  const core=getCore(),chat=core?.chats.get(owner.id);
-  return !!(core&&!core.closed&&!core.store.data.paused&&chat?.owner&&chat.mode==='private'&&
-    digest(JSON.stringify([chat.id,chat.title,chat.mode,chat.owner]))===binding&&core.state(owner.id).binding===binding&&
-    !core.state(owner.id).rotationFence&&!core.state(owner.id).rotationUncertain);
- };
+ requireValue(typeof isOwnerActive==='function','OWNER_AUTHORITY_REQUIRED');
  requireValue(typeof spoolDirectory==='string'&&/^[a-z0-9_-]{1,80}$/.test(spoolDirectory),'ATTACHMENT_SPOOL_DIRECTORY_INVALID');
  const nativeBindings=new Map(),pending=new Map();let closed=false;
  const fileBroker=createSavedFileBroker({root:savedHost.fileRoot,accountId:savedHost.accountId,
   ownerBindingId:binding,ownerChatId:owner.id,isOwnerActive,python,
   resolveBoundFile:card=>nativeBindings.get(card.sourceMessageId),
-  verifyBinding:receipt=>savedHost.verifyBinding(receipt),timeoutMs:savedHost.timeoutMs});
+  verifyBinding:receipt=>savedHost.verifyBinding(receipt),timeoutMs:savedHost.timeoutMs,worker});
  const ingress=createAttachmentIngress({root:path.join(root,spoolDirectory),ownerBindingId:binding,
   ownerChatId:owner.id,createAttachmentRegistry,fileBroker,isOwnerActive});
  async function receiveOwnerFile({chatId,message,read}){

@@ -105,6 +105,9 @@ class SendResult:
 
 @dataclass(frozen=True)
 class DriverConfig:
+    native_saved_file_profile: dict[str, Any] | None = None
+    native_image_profile: dict[str, Any] | None = None
+    owner_chat: dict[str, str] | None = None
     mode: Literal["fake", "real"] = "fake"
     allow_real: bool = False
     adapter_root: str | None = None

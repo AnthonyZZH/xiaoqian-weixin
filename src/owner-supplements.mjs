@@ -8,6 +8,7 @@ export async function createOwnerSupplements({getCore,config,services={}}){
     const core=getCore(),entry=bindings.get(agent),chat=entry&&core?.chats.get(entry.chatId);
     return Boolean(!closed&&!paused&&core&&!core.closed&&!core.store.data.paused&&entry&&
       chat?.owner===true&&chat.mode==='private'&&bindingId===entry.bindingId&&
+      core.handles.get(chat.id)?.agent===agent&&
       digest(JSON.stringify([chat.id,chat.title,chat.mode,chat.owner]))===bindingId&&
       core.state(chat.id).binding===bindingId);
   };

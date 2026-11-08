@@ -38,7 +38,7 @@ export class DurableDriverClient {
     if(this.paused&&operation!=='health')return {status:'paused',code:'DRIVER_PAUSED'};
     if(!['health','schedule_poll'].includes(operation)&&(!this.targets.has(args.targetId)||Object.hasOwn(args,'title')||Object.hasOwn(args,'mode')))
       return {status:'rejected',code:'DRIVER_TARGET_DENIED'};
-    if(!['health','read','ack','image_inspect','image_capture','image_current','saved_file_prepare','saved_file_selected','saved_file_acquire','attachment_inspect','attachment_save_as','attachment_completion','send_text','transcribe','extract_image','send_image','media_catalog','media_review','media_import_file','media_import_static','media_preview','media_resolve','schedule_poll','schedule_heard','schedule_spoke','schedule_claim','schedule_renew','schedule_prepare','schedule_finish'].includes(operation))
+    if(!['health','read','ack','image_inspect','image_capture','image_current','saved_file_acquire','attachment_inspect','attachment_save_as','attachment_completion','send_text','transcribe','extract_image','send_image','media_catalog','media_review','media_import_file','media_import_static','media_preview','media_resolve','schedule_poll','schedule_heard','schedule_spoke','schedule_claim','schedule_renew','schedule_prepare','schedule_finish'].includes(operation))
       return {status:'rejected',code:'OPERATION_DENIED'};
     if(['attachment_inspect','attachment_save_as','attachment_completion','saved_file_acquire'].includes(operation)){
       const target=this.targets.get(args.targetId);
@@ -88,8 +88,7 @@ export class DurableDriverClient {
       chats:[...this.targets.values()].map(c=>({id:c.id,title:c.title,mode:c.mode,owner:c.owner===true})),
       native_saved_files_enabled:this.options.nativeSavedFilesEnabled===true,
       native_saved_file_profile:this.options.nativeSavedFileProfile,
-      group_image_ids:this.options.groupImageIds||[],
-      native_received_witnesses:this.options.nativeReceivedWitnesses||[],
+      native_image_profile:this.options.nativeImageProfile,
       fake_options:this.options.mock||{},max_chars:this.options.maxChars||1000,
       command_timeout:Math.max(this.options.commandTimeout||5,this.options.nativeSavedFilesEnabled===true?14:0)};
     const answer=await this._request('initialize',{config});
@@ -109,28 +108,25 @@ export class DurableDriverClient {
     });
   }
   withNativeImageLease(callback,{timeoutMs=8000}={}){
-    if(typeof callback!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<100||timeoutMs>15000)throw Error('IMAGE_LEASE_INVALID');
+    return this._nativeLease(callback,timeoutMs,'IMAGE',['image_inspect','image_capture','image_current'],100);
+  }
+  withNativeFileLease(callback,{timeoutMs=15000}={}){
+    return this._nativeLease(callback,timeoutMs,'SAVED_FILE',['saved_file_acquire'],1000);
+  }
+  _nativeLease(callback,timeoutMs,prefix,operations,minimum){
+    if(typeof callback!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<minimum||timeoutMs>15000)throw Error(prefix+'_LEASE_INVALID');
     const job=this.queue.then(async()=>{
-      if(this.closed||this.paused)throw Error('IMAGE_DRIVER_PAUSED');
+      if(this.closed||this.paused)throw Error(prefix+'_DRIVER_PAUSED');
       let active=true,timer;
       const request=(operation,args)=>{
-        if(!active||!['image_inspect','image_capture','image_current','saved_file_prepare','saved_file_selected'].includes(operation))throw Error('IMAGE_LEASE_CLOSED');
+        if(!active||!operations.includes(operation))throw Error(prefix+'_LEASE_CLOSED');
         return this._call(operation,args,{});
       };
       try{return await Promise.race([Promise.resolve().then(()=>callback(request)),new Promise((_,reject)=>{
-        timer=setTimeout(()=>{active=false;this._stop('IMAGE_LEASE_TIMEOUT');reject(Error('IMAGE_LEASE_TIMEOUT'));},timeoutMs);
+        timer=setTimeout(()=>{active=false;this._stop(prefix+'_LEASE_TIMEOUT');reject(Error(prefix+'_LEASE_TIMEOUT'));},timeoutMs);
       })]);}finally{active=false;clearTimeout(timer);}
     });
     this.queue=job.catch(()=>{});return job;
-  }
-  withNativeFileLease(callback,{timeoutMs=15000}={}){
-    if(typeof callback!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>15000)throw Error('SAVED_FILE_LEASE_INVALID');
-    const job=this.queue.then(async()=>{
-      if(this.closed||this.paused)throw Error('SAVED_FILE_DRIVER_PAUSED');let active=true,timer;
-      const send=(operation,args)=>{if(!active||operation!=='saved_file_acquire')throw Error('SAVED_FILE_LEASE_CLOSED');return this._call(operation,args,{});};
-      try{return await Promise.race([Promise.resolve().then(()=>callback(send)),new Promise((_,reject)=>{timer=setTimeout(()=>{active=false;this._stop('SAVED_FILE_LEASE_TIMEOUT');reject(Error('SAVED_FILE_LEASE_TIMEOUT'));},timeoutMs);})]);}
-      finally{active=false;clearTimeout(timer);}
-    });this.queue=job.catch(()=>{});return job;
   }
   isTrustedNativeRead(read){return nativeReadReceipts.has(read);}
   readDiagnosticsStatus(){return this._readJournal?.status()||{revision:'read-outcomes/v1',started:0,finished:0,pending:0,writeFailures:0,last:null};}

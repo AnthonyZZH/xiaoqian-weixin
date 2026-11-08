@@ -1,8 +1,7 @@
-import test from 'node:test';import assert from 'node:assert/strict';import path from 'node:path';import {pathToFileURL} from 'node:url';
-const root=process.env.XQ_NATIVE_PACKAGE_ROOT;if(!root)throw Error('XQ_NATIVE_PACKAGE_ROOT_REQUIRED');const load=n=>import(pathToFileURL(path.join(root,n,'lib/index.js')).href);
-const {Context}=await load('cordis');
-const {default:SystemPrompt}=await load('dsh-system-prompt');
-const {default:Approval}=await load('dsh-user-approval');
+import test from 'node:test';import assert from 'node:assert/strict';
+import{Context}from'file:///C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/cordis/lib/index.js';
+import SystemPrompt from'file:///C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/dsh-system-prompt/lib/index.js';
+import Approval from'file:///C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/dsh-user-approval/lib/index.js';
 import{createWechatApproval}from'./wechat-approval.mjs';
 async function fixture(t,{policy='ask',ttlMs=1000,delivery='ok'}={}){
  const ctx=new Context(),prompt=ctx.plugin(SystemPrompt,{});await prompt.await();const approval=ctx.plugin(Approval,{policy});await approval.await();

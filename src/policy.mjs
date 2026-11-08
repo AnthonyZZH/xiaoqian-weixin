@@ -24,11 +24,11 @@ export const socialTools=['wechat_reply','wechat_skip','wechat_status','wechat_m
 export const ownerTools=[...socialTools,'wechat_relay','wechat_memory_edit','wechat_memory_confirm','wechat_sticker_review','wechat_persona','wechat_control','wechat_search','wechat_draw','wechat_task','wechat_task_status'];
 export function allowedTools(chat,capabilities={}) {
   const names=(chat.owner?ownerTools:socialTools).filter(name=>{
-    // Hide only the unconfigured legacy submission; status and isolated tasks remain available.
-    if(name==='wechat_task'&&Array.isArray(capabilities.taskManager?.tools)&&capabilities.taskManager.tools.length===0)return false;
+    if(capabilities.ownerTasks&&['wechat_task','wechat_task_status'].includes(name))return false;
     if(name==='wechat_search')return typeof capabilities.search==='function'&&!(chat.owner&&capabilities.ownerSearchTool);
+    if(name==='wechat_task'&&Array.isArray(capabilities.taskManager?.tools)&&capabilities.taskManager.tools.length===0)return false;
     if(name==='wechat_draw')return typeof capabilities.draw==='function';
-    if(name==='wechat_describe_image')return typeof capabilities.describeImage==='function';
+    if(name==='wechat_describe_image')return chat.owner&&chat.mode==='private'&&typeof capabilities.describeImage==='function';
     return true;
   });
   return new Set([...names,
@@ -37,6 +37,7 @@ export function allowedTools(chat,capabilities={}) {
     ...(chat.owner?(capabilities.ownerNativeTools||[]):[])]);
 }
 export function authorize(chat,name) {
+  requireValue(name!=='wechat_describe_image'||chat.owner&&chat.mode==='private','OWNER_IMAGE_REQUIRED');
   requireValue((chat.owner?ownerTools:socialTools).includes(name)||
     name==='wechat_search'&&chat.webSearch===true||
     name==='wechat_draw'&&chat.drawEnabled===true,'TOOL_SCOPE_DENIED');

@@ -14,7 +14,7 @@ export function invokeSavedFileWorker(request,{python='python',timeoutMs=5000,si
   if(signal?.aborted){reject(Error('SAVED_FILE_CANCELLED'));return;}
   const env={PYTHONDONTWRITEBYTECODE:'1',PYTHONIOENCODING:'utf-8'};
   for(const key of ['SystemRoot','WINDIR','PATH','TEMP','TMP'])if(process.env[key])env[key]=process.env[key];
-  const child=spawn(python,['-B',fileURLToPath(new URL('./saved_file_worker.py',import.meta.url))],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
+  const child=spawn(python,['-B',fileURLToPath(new URL('../xiaoqian_driver/saved_file_identity.py',import.meta.url))],{env,windowsHide:true,stdio:['pipe','pipe','pipe']});
   let done=false,size=0;const chunks=[];
   const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);error?reject(error):resolve(value);};
   const stop=code=>{child.kill();finish(Error(code));};
@@ -49,7 +49,7 @@ export function createSavedFileBroker({root,accountId,ownerBindingId,ownerChatId
  const base=path.resolve(root),running=new Map();
  async function run(card,scope){
   check(scope.ownerBindingId===ownerBindingId&&scope.ownerChatId===ownerChatId&&await isOwnerActive(scope)===true,'OWNER_ATTACHMENT_REQUIRED');
-  check(/^[a-f0-9]{64}$/.test(card?.sourceMessageId)&&typeof card.displayName==='string'&&/^[^\\/:\x00-\x1f]{1,196}\.(txt|docx|pdf)$/i.test(card.displayName),'SAVED_FILE_CARD_INVALID');
+  check(/^[a-f0-9]{64}$/.test(card?.sourceMessageId)&&typeof card.displayName==='string'&&/^[^\\/:\x00-\x1f]{1,196}\.(txt|md|csv|json|pdf|docx|xlsx|pptx|zip)$/i.test(card.displayName),'SAVED_FILE_CARD_INVALID');
   check(Number.isInteger(scope.maxBytes)&&scope.maxBytes>0&&scope.maxBytes<=MAX,'SAVED_FILE_LIMIT_INVALID');
   const receipt=await resolveBoundFile(card,scope);
   check(receipt,'SAVED_FILE_MAPPING_UNAVAILABLE');
@@ -65,7 +65,7 @@ export function createSavedFileBroker({root,accountId,ownerBindingId,ownerChatId
   check(receipt.fileIdentity&&receipt.fileIdentity.scheme===(process.platform==='win32'?'windows-file-id-v1':'posix-stat-v1')&&
     /^\d+$/.test(receipt.fileIdentity.device)&&/^\d+$/.test(receipt.fileIdentity.inode),'SAVED_FILE_IDENTITY_REQUIRED');
   const result=await worker({root:base,relativePath:receipt.relativePath,expectedBytes:receipt.expectedBytes,
-    expectedSha256:expectedHash,fileIdentity:receipt.fileIdentity,maxBytes:scope.maxBytes,stableMs:75},{python,timeoutMs,signal:scope.signal});
+    expectedSha256:expectedHash,fileIdentity:receipt.fileIdentity,maxBytes:scope.maxBytes},{python,timeoutMs,signal:scope.signal});
   check(await isOwnerActive(scope)===true&&await verifyBinding(receipt,scope)===true,'SAVED_FILE_BINDING_UNVERIFIED');
   check(result&&typeof result.base64==='string'&&/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(result.base64),'SAVED_FILE_BYTES_INVALID');
   const bytes=Buffer.from(result.base64,'base64');

@@ -10,6 +10,8 @@ import threading
 from pathlib import Path
 
 from .backends import FakeBackend, RealBackend
+from .image_native import NativeImageBroker,ImageError
+from .saved_file_native import NativeSavedFileBroker,SavedFileError
 from .lease import DesktopLease
 from .protocol import Chat, DriverConfig, DriverError, NotSent, SendUnknown, VERSION, decode, encode, MAX_LINE
 
@@ -88,6 +90,13 @@ def serve():
                             backend = RealBackend(config.adapter_root)
                         else:
                             backend = FakeBackend(config.fake_options, args["generation"], args["audit_path"])
+                        backend._attachment_generation=args["generation"]
+                        backend._edge_owner=Chat(**config.owner_chat) if config.owner_chat else None
+                        if backend._edge_owner is not None and (backend._edge_owner not in config.allowed_chats or backend._edge_owner.mode!="private"):raise DriverError("OWNER_ATTACHMENT_REQUIRED")
+                        backend._native_image_profile=config.native_image_profile
+                        backend._native_saved_profile=config.native_saved_file_profile
+                        backend._native_image_broker=NativeImageBroker(backend,args["generation"],mode=config.mode)
+                        backend._native_saved_broker=NativeSavedFileBroker(backend,args["generation"])
                         result = {"protocol": VERSION, "pid": os.getpid(), "mode": config.mode}
                     else:
                         if backend is None:
@@ -96,12 +105,21 @@ def serve():
                             result = {"pid": os.getpid(), "mode": config.mode}
                         elif command == "health":
                             result = backend.health()
+                        elif command in ("image_inspect","image_capture","image_current","saved_file_acquire"):
+                            chat=Chat(**args["chat"])
+                            if chat!=backend._edge_owner:raise ImageError("OWNER_IMAGE_REQUIRED")
+                            broker=backend._native_saved_broker if command=="saved_file_acquire" else backend._native_image_broker
+                            result=broker.dispatch(chat,command,args)
                         elif command in ("read", "send", "send_file", "transcribe", "extract_image"):
                             chat = Chat(**args["chat"])
                             if config.mode == "real" and chat not in config.allowed_chats:
                                 raise NotSent("chat_not_allowed")
                             if command == "read":
+                                if chat==backend._edge_owner:backend._native_image_broker.before_read(chat)
                                 result = {"rows": backend.read(chat)}
+                                if chat==backend._edge_owner:
+                                    result["image_read"]=backend._native_image_broker.begin_read(chat,result["rows"])
+                                    backend._native_saved_broker.begin_read(chat,result["rows"],result["image_read"])
                             elif command == "transcribe":
                                 key = args.get("source_key")
                                 if not isinstance(key, str) or not key:
@@ -125,6 +143,9 @@ def serve():
                         else:
                             raise DriverError("unknown_command")
                 response = {"v": VERSION, "id": request_id, "ok": True, "result": result}
+            except (ImageError,SavedFileError) as exc:
+                response={"v":VERSION,"id":request_id,"ok":False,"error":{"code":exc.code,"send_status":None}}
+                if isinstance(exc,SavedFileError) and hasattr(exc,"native_receive_result"):response["error"]["native_receive_result"]=exc.native_receive_result
             except NotSent as exc:
                 response = {"v": VERSION, "id": request_id, "ok": False,
                             "error": {"code": exc.code, "send_status": "failed"}}

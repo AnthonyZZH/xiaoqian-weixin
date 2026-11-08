@@ -91,10 +91,16 @@ class DriverClient:
                             self._ensure_worker(job.deadline)
                             result = self._request(job.command, job.args, job.deadline)
                             if job.command == "read":
+                                image_read=result.get("image_read")
                                 rows = result.get("rows")
                                 if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                                     raise DriverError("invalid_read_response")
-                                result = self._state.ingest(Chat(**job.args["chat"]), rows)
+                                chat=Chat(**job.args["chat"])
+                                result = self._state.ingest(chat, rows)
+                                from .native_read_binding import bind_current_read
+                                self.last_native_rows=bind_current_read(self._state,chat,rows,image_read) if image_read else []
+                                self.last_image_read=image_read
+                                self._image_snapshot_generation=self._generation
                             elif job.command == "health":
                                 result = {**result, "generation": self._generation, "pid": self._process.pid}
                     job.future.set_result(result)
@@ -176,6 +182,9 @@ class DriverClient:
             raise
 
     def _request(self, command: str, args: dict, deadline: float) -> dict:
+        if command in ("image_inspect","image_capture","image_current","saved_file_acquire"):
+            from .image_transport import prepare
+            args=prepare(self,Chat(**args["chat"]),args)
         self._remaining(deadline)
         if command != "hello" and not getattr(self, "_worker_ready", False):
             raise DriverError("worker_not_ready")
@@ -207,8 +216,15 @@ class DriverClient:
             if response["ok"]:
                 if not isinstance(response.get("result"), dict):
                     raise DriverError("invalid_response")
-                return response["result"]
+                result=response["result"]
+                if command=="saved_file_acquire":
+                    from .saved_file_transition import commit_received_transition
+                    commit_received_transition(self._state,Chat(**args["chat"]),result,args["handle"])
+                return result
             error = response.get("error")
+            if command=="saved_file_acquire" and isinstance(error,dict) and isinstance(error.get("native_receive_result"),dict):
+                from .saved_file_transition import commit_received_transition
+                commit_received_transition(self._state,Chat(**args["chat"]),error["native_receive_result"],args["handle"])
             if not isinstance(error, dict) or not isinstance(error.get("code"), str):
                 raise DriverError("invalid_error_response")
             exc = DriverError(error["code"])
@@ -327,6 +343,10 @@ class DriverClient:
         if not isinstance(result.get("text"), str):
             raise DriverError("invalid_transcription_response")
         return result["text"]
+
+    def native_image_command(self,chat,command,args,*,timeout=None):
+        if command not in ("image_inspect","image_capture","image_current","saved_file_acquire"):raise DriverError("IMAGE_COMMAND_DENIED")
+        return self._submit(command,dict(args,chat=chat.to_dict()),timeout)
 
     def extract_image(self, chat: Chat, source_key: str, *, timeout: float | None = None) -> str:
         result = self._submit("extract_image", {"chat": chat.to_dict(), "source_key": source_key}, timeout)

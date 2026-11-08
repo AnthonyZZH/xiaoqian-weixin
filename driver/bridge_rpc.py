@@ -49,7 +49,11 @@ def serve():
                         raise ValueError("duplicate_chat")
                     if config["mode"] == "real" and not config.get("allow_real"):
                         raise ValueError("real_mode_not_authorized")
+                    owner_row=next((row for row in config["chats"] if row.get("owner") is True),None)
                     options = DriverConfig(
+                        owner_chat={"name":owner_row["title"],"mode":owner_row["mode"]} if owner_row else None,
+                        native_saved_file_profile=config.get("native_saved_file_profile"),
+                        native_image_profile=config.get("native_image_profile"),
                         mode=config["mode"], allow_real=config.get("allow_real") is True,
                         adapter_root=config.get("adapter_root"),
                         media_root=config.get("media_root"),
@@ -100,7 +104,13 @@ def serve():
                 if target_id not in chats:
                     raise ValueError("target_denied")
                 chat = chats[target_id]
-                if op == "read":
+                if op in ("image_inspect","image_capture","image_current","saved_file_acquire"):
+                    if target_id not in trusted_owner or chat.mode!="private":raise ValueError("OWNER_ATTACHMENT_REQUIRED")
+                    if op=="saved_file_acquire" and config.get("native_saved_files_enabled") is not True:raise ValueError("NATIVE_SAVED_FILES_DISABLED")
+                    if op!="saved_file_acquire" and not allow_static_capture:raise ValueError("STATIC_CAPTURE_NOT_ENABLED")
+                    data=client.native_image_command(chat,op,{key:args.get(key) for key in ("messageId","readId","generation","ticket")},timeout=14 if op=="saved_file_acquire" else None)
+                    reply(request_id,"ok",code="NATIVE_MEDIA",data=data)
+                elif op == "read":
                     result = client.read(chat)
                     rows = []
                     for item in result.messages:
@@ -108,14 +118,17 @@ def serve():
                             raise ValueError("chat_binding_mismatch")
                         rows.append({"id": item.message_id, "text": item.text,
                                      "role": item.role, "sender": item.sender,
-                                     "sourceKey": item.source_key,
+                                     "sourceKey": (next((r["sourceKey"] for r in getattr(client,"last_native_rows",[]) if r["id"]==item.message_id),None) or item.source_key),
                                      "imageAvailable": item.image_available,
                                      "voiceAvailable": item.voice_available,
                                      "textComplete": item.text_complete, "textSource": item.text_source,
                                      "legacyMessageIds": list(item.legacy_message_ids)})
                     deferred=[{"id":item.message_id,"textLength":len(item.text),"textSource":item.text_source,
                                "reason":item.text_reason,"legacyMessageIds":list(item.legacy_message_ids)} for item in result.deferred]
-                    reply(request_id, "ok", code="READ", messages=rows,deferred=deferred,identityVersion="uia-row-v2", identityDeferred=getattr(client._state, "last_identity_defer", None), identityDuplicateCount=result.duplicate_count)
+                    image_read=getattr(client,"last_image_read",None) or {}
+                    reply(request_id, "ok", code="READ", messages=rows,deferred=deferred,identityVersion="uia-row-v2", identityDeferred=getattr(client._state, "last_identity_defer", None), identityDuplicateCount=result.duplicate_count,
+                          generation=image_read.get("generation"),readId=image_read.get("readId"),
+                          nativeCurrent=getattr(client,"last_native_rows",[]) if target_id in trusted_owner and chat.mode=="private" else [])
                 elif op == "ack":
                     ids = args.get("messageIds")
                     if not isinstance(ids, list) or len(ids) > 200 or any(

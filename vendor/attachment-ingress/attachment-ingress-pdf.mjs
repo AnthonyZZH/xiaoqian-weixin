@@ -19,7 +19,7 @@ export function identifyFileCard(evidence){
  // Native saved-file metadata, never a link/filename scraped from chat text.
  if(evidence?.kind!=='native-saved-file')return null;
  const names=[evidence.displayName].filter(x=>typeof x==='string'&&x.length<=200);
- const files=[...new Set(names.filter(x=>/^[^\\/:\0\r\n]+\.(txt|docx|pdf)$/iu.test(x)))];
+ const files=[...new Set(names.filter(x=>/^[^\\/:\0\r\n]+\.(txt|md|csv|json|pdf|docx|xlsx|pptx|zip)$/iu.test(x)))];
  if(files.length!==1)return null;
  return {displayName:files[0],extension:path.extname(files[0]).toLowerCase(),status:'candidate_unverified',
   sourceMessageId:evidence.sourceMessageId,downloadVerified:false};
@@ -34,7 +34,7 @@ export function createAttachmentIngress({root,ownerBindingId,ownerChatId,createA
  const manifest=path.join(base,'ingress-manifest.json');
  function save(){const next=manifest+'.'+crypto.randomUUID()+'.tmp';fs.writeFileSync(next,JSON.stringify([...records.values()]),{flag:'wx'});fs.renameSync(next,manifest);}
  function inspect(row){
-  check(/^[a-f0-9-]+\.(txt|docx|pdf)$/.test(row.file),'SPOOL_NAME_INVALID');
+  check(/^[a-f0-9-]+\.(txt|md|csv|json|pdf|docx|xlsx|pptx|zip)$/.test(row.file),'SPOOL_NAME_INVALID');
   const full=path.join(base,row.file),st=fs.lstatSync(full);
   check(st.isFile()&&!st.isSymbolicLink()&&st.nlink===1&&st.size<=MAX,'SPOOL_FILE_INVALID');return full;
  }
@@ -88,3 +88,4 @@ export function createAttachmentIngress({root,ownerBindingId,ownerChatId,createA
   }
  });
 }
+

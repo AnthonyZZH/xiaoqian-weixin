@@ -16,10 +16,7 @@
     "legacy/",
     "cordis.patch.yml",
     "docs/",
-    "requirements-windows.txt",
-    "compat/",
-    "SOURCE.json",
-    "NOTICE.md"
+    "requirements-windows.txt"
   ],
   "engines": {
     "node": ">=24"

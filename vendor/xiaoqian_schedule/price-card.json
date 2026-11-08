@@ -1,0 +1,36 @@
+{
+  "schema": "xq.deepseek.price-card/v1",
+  "source_url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "retrieved_at": "2026-11-07T19:01:03Z",
+  "currency": "CNY",
+  "unit": "CNY per 1000000 tokens",
+  "band_policy": {
+    "timezone": "Asia/Shanghai",
+    "time_based_pricing": true,
+    "peak_weekdays": [1, 2, 3, 4, 5],
+    "peak_intervals_local": [["09:00", "12:00"], ["14:00", "18:00"]],
+    "exclude_cn_statutory_holidays": true
+  },
+  "wake_intervals_seconds": {
+    "peak": [3600, 7200],
+    "offpeak": [900, 1800],
+    "calendar_unknown": [3600, 7200],
+    "flat": [1800, 3600],
+    "night": [7200, 14400]
+  },
+  "flat_quiet_interval_local": ["01:00", "08:00"],
+  "models": {
+    "deepseek-flash": {
+      "rates": {
+        "offpeak": {"hit": 0.02, "miss": 1, "output": 4},
+        "peak": {"hit": 0.04, "miss": 2, "output": 8}
+      }
+    },
+    "deepseek-v4-pro": {
+      "rates": {
+        "offpeak": {"hit": 0.15, "miss": 4.5, "output": 13.5},
+        "peak": {"hit": 0.30, "miss": 9, "output": 27}
+      }
+    }
+  }
+}

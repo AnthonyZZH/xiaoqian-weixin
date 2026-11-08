@@ -141,13 +141,18 @@ class RealBackend:
         adapter = self._select(chat)
         rows = adapter.read()
         self.rows = {row.key: row for row in rows}
-        return [{"key": row.key, "text": row.text, "role": row.role,
-                 "sender": row.sender, "image_available": row.image is not None,
+        result = [{"key": row.key, "text": row.text, "role": row.role,
+                 "sender": row.sender, "image_available": row.image is not None or getattr(row,"native_image_available",False),
                  "voice_available": row.voice is not None, "odd": row.odd,
                  "text_complete": getattr(row,"text_complete",False),
                  "text_source": getattr(row,"text_source","legacy_unverified"),
                  "text_reason": getattr(row,"text_reason","missing_completeness"),
                  "legacy_keys": list(getattr(row,"legacy_keys",()))} for row in rows]
+        from .native_row_ref import observe
+        for raw,row in zip(result,rows):
+            ref=observe(self,row)
+            if ref is not None:raw["native_ref"]=ref
+        return result
 
     def transcribe(self, chat: Chat, source_key: str):
         adapter = self._select(chat)

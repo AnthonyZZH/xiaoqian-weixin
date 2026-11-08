@@ -1,85 +1,22 @@
-"""Bounded, standard-library document extraction and public HTML search.
+"""Bounded local document extraction and public HTML search.
 
 Document bytes arrive through stdin; no model-supplied filesystem paths are opened.
 No document code, macros, relationships, or embedded objects are executed/fetched.
 """
 import base64
-import io
 import json
 import re
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-import zipfile
 from html.parser import HTMLParser
-from xml.etree import ElementTree as ET
 
 MAX_INPUT = 8 * 1024 * 1024
-MAX_TEXT = 60000
-MAX_XML = 8 * 1024 * 1024
 
 
 class ToolError(Exception):
     pass
-
-
-def document(data, extension):
-    if not isinstance(data, bytes) or len(data) > 5 * 1024 * 1024:
-        raise ToolError('DOCUMENT_SIZE_LIMIT')
-    if extension == '.txt':
-        try:
-            if data.startswith((b'\xff\xfe', b'\xfe\xff')):
-                text = data.decode('utf-16', errors='strict')
-                encoding = 'utf-16-bom'
-            else:
-                text = data.decode('utf-8-sig', errors='strict')
-                encoding = 'utf-8'
-        except UnicodeError:
-            raise ToolError('TEXT_ENCODING_UNSUPPORTED') from None
-        if '\x00' in text:
-            raise ToolError('TEXT_BINARY_REJECTED')
-    elif extension == '.docx':
-        encoding = 'ooxml'
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            entries = archive.infolist()
-            if len(entries) > 1000 or len({item.filename for item in entries}) != len(entries):
-                raise ToolError('DOCX_STRUCTURE_LIMIT')
-            if sum(item.file_size for item in entries) > 20 * 1024 * 1024:
-                raise ToolError('DOCX_EXPANSION_LIMIT')
-            for item in entries:
-                name = item.filename.lower()
-                if item.flag_bits & 1 or name.endswith('vbaproject.bin') or '/activex/' in name:
-                    raise ToolError('DOCX_ACTIVE_CONTENT_REJECTED')
-                if item.file_size > MAX_XML or item.file_size > max(1024, item.compress_size * 100):
-                    raise ToolError('DOCX_EXPANSION_LIMIT')
-            if 'word/document.xml' not in archive.namelist():
-                raise ToolError('DOCX_DOCUMENT_MISSING')
-            xml = archive.read('word/document.xml')
-            # Reject DTD/entity declarations before any XML parser processes them.
-            decoded = xml.decode('utf-16' if xml.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig')
-            if re.search(r'<!\s*(?:DOCTYPE|ENTITY)', decoded, re.I):
-                raise ToolError('DOCX_ENTITY_REJECTED')
-            root = ET.fromstring(decoded)
-            ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
-            paragraphs = []
-            for paragraph in root.iter(ns + 'p'):
-                chunks = []
-                for element in paragraph.iter():
-                    if element.tag == ns + 't':
-                        chunks.append(element.text or '')
-                    elif element.tag == ns + 'tab':
-                        chunks.append('\t')
-                    elif element.tag in (ns + 'br', ns + 'cr'):
-                        chunks.append('\n')
-                paragraphs.append(''.join(chunks))
-            text = '\n'.join(paragraphs)
-    else:
-        raise ToolError('DOCUMENT_TYPE_UNSUPPORTED')
-    return {'text': text[:MAX_TEXT], 'truncated': len(text) > MAX_TEXT,
-            'total_characters': len(text), 'encoding': encoding,
-            'trust': 'untrusted_document_content', 'macros_executed': False,
-            'coverage': 'plain_text' if extension == '.txt' else 'document_body_and_tables_only'}
 
 
 def safe_url(value):
@@ -183,15 +120,11 @@ def main():
         raise ToolError('REQUEST_SIZE_LIMIT')
     request = json.loads(raw)
     if request['operation'] == 'document':
-        data = base64.b64decode(request['base64'], validate=True)
-        if request['extension'] == '.pdf':
-            from pdf_document import document_pdf, PDFError
-            try:
-                return document_pdf(data, page_start=request.get('page_start', 1),
-                                    page_count=request.get('page_count', 5), ocr=None)
-            except PDFError as error:
-                raise ToolError(str(error)) from None
-        return document(data, request['extension'])
+        from document_reader import document as read_document, DocumentError
+        try:
+            return read_document(base64.b64decode(request['base64'], validate=True), request['extension'])
+        except DocumentError as error:
+            raise ToolError(str(error)) from None
     if request['operation'] == 'fetch_page':
         from web_reader import fetch_page, PageError
         try:

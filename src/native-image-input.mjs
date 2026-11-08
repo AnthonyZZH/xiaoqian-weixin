@@ -51,6 +51,7 @@ export function createNativeImageInput({attachments,provider,getScope}={}){
       check(id(chatId)&&/^[a-f0-9]{64}$/.test(message?.id)&&message.role==='user'&&message.imageAvailable===true&&id(message.sourceKey),'IMAGE_CANONICAL_MESSAGE_REQUIRED');
       check(read?.identityVersion==='uia-row-v2'&&integer(read.generation)&&read.generation>0&&id(read.readId),'IMAGE_READ_PROVENANCE_REQUIRED');
       const scope=structuredClone(getScope(chatId));
+      check(scope?.owner===true&&scope.mode==='private','OWNER_IMAGE_REQUIRED');
       check(scope?.active===true&&id(scope.binding)&&id(scope.sessionId)&&['private','group'].includes(scope.mode)&&typeof scope.owner==='boolean'&&integer(scope.groupEpoch)&&id(scope.provider)&&id(scope.model),'IMAGE_SCOPE_INVALID');
       let captureAttempted=false;
       try{return await provider.withReadLease(async()=>{
@@ -81,7 +82,7 @@ export function createNativeImageInput({attachments,provider,getScope}={}){
     async content(ticket,{chatId,messageId}){
       const row=tickets.get(ticket);
       check(row&&row.chatId===chatId&&row.messageId===messageId,'IMAGE_TICKET_SCOPE_MISMATCH');
-      current(chatId,row.scope);check(await provider.isCurrent(row.evidence)===true,'IMAGE_SNAPSHOT_STALE');current(chatId,row.scope);
+      current(chatId,row.scope);check(await provider.isCurrent(row.evidence)===true,'IMAGE_SNAPSHOT_STALE');
       return structuredClone(row.blocks);
     }
   });

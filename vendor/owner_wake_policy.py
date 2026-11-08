@@ -5,20 +5,35 @@ import json
 from pathlib import Path
 
 from xiaoqian_schedule import ScheduleConfig as BaseConfig, Scheduler as BaseScheduler
-from xiaoqian_schedule.config import zone
+from xiaoqian_schedule.config import Window, zone
 
 CALENDAR = json.loads(Path(__file__).with_name('calendar-2026.json').read_text(encoding='utf-8'))
+PRICE_CARD = json.loads((Path(__file__).parent / 'xiaoqian_schedule/price-card.json').read_text(encoding='utf-8'))
+POLICY = PRICE_CARD['band_policy']
+WAKE_INTERVALS = PRICE_CARD['wake_intervals_seconds']
 
 
 def price_band(now):
-    dt = datetime.fromtimestamp(now, zone('Asia/Shanghai'))
+    dt = datetime.fromtimestamp(now, zone(POLICY['timezone']))
+    if not POLICY['time_based_pricing']:
+        return 'flat'
+    in_window = any(Window.parse(w).contains(dt.hour * 60 + dt.minute) for w in POLICY['peak_intervals_local'])
+    if dt.isoweekday() not in POLICY['peak_weekdays'] or not in_window:
+        return 'offpeak'
+    if not POLICY['exclude_cn_statutory_holidays']:
+        return 'peak'
     if dt.year not in CALENDAR['verified_years']:
-        # Holiday set unknown: charge-safe peak cadence on weekdays, known weekend offpeak.
-        return 'calendar_unknown' if dt.weekday() < 5 else 'offpeak'
+        return 'calendar_unknown'
     holiday = any(start <= dt.date().isoformat() <= end for start, end in CALENDAR['holiday_ranges'])
-    minute = dt.hour * 60 + dt.minute
-    peak = dt.weekday() < 5 and not holiday and (540 <= minute < 720 or 840 <= minute < 1080)
-    return 'peak' if peak else 'offpeak'
+    return 'offpeak' if holiday else 'peak'
+
+
+def wake_band(now):
+    band = price_band(now)
+    dt = datetime.fromtimestamp(now, zone(POLICY['timezone']))
+    if band == 'flat' and Window.parse(PRICE_CARD['flat_quiet_interval_local']).contains(dt.hour * 60 + dt.minute):
+        return 'night'
+    return band
 
 
 class ScheduleConfig:
@@ -31,8 +46,8 @@ class ScheduleConfig:
         chats = tuple(replace(p, enabled=p.owner and master) for p in cfg.chats)
         if sum(p.owner for p in chats) != 1:
             raise ValueError('EXACTLY_ONE_OWNER_REQUIRED')
-        return replace(cfg, chats=chats, timezone_name='Asia/Shanghai',
-                       owner_peak_seconds=(1080, 1920), owner_offpeak_seconds=(180, 420),
+        return replace(cfg, chats=chats, timezone_name=POLICY['timezone'],
+                       owner_peak_seconds=tuple(WAKE_INTERVALS['peak']), owner_offpeak_seconds=tuple(WAKE_INTERVALS['offpeak']),
                        owner_bypass_quiet=True, owner_bypass_budget=True)
 
 
@@ -47,8 +62,7 @@ class Scheduler(BaseScheduler):
     def _schedule(self, p, now, activity=True):
         if not p.owner:
             return super()._schedule(p, now, activity)
-        band = price_band(now)
-        bounds = (1080, 1920) if band in ('peak', 'calendar_unknown') else (180, 420)
+        bounds = WAKE_INTERVALS[wake_band(now)]
         return now + self.rng.uniform(*bounds)
 
     def _ready(self, db, p, state, now):
@@ -63,7 +77,7 @@ class Scheduler(BaseScheduler):
         row = db.execute('SELECT next_at FROM chats WHERE key=?', (p.key,)).fetchone()
         if row is None:
             return
-        band = price_band(now)
+        band = wake_band(now)
         sleep = db.execute("SELECT value FROM meta WHERE key='owner_sleep_until'").fetchone()[0]
         due = max(row['next_at'], sleep) if p.enabled and not p.muted else None
         db.execute('INSERT INTO owner_wake_state VALUES (?,?,?,NULL,?) ON CONFLICT(chat_key) DO UPDATE SET price_band=excluded.price_band,next_due=excluded.next_due,decision=COALESCE(?,owner_wake_state.decision)',
@@ -71,7 +85,7 @@ class Scheduler(BaseScheduler):
 
     def _reconcile(self, startup=False, now=None):
         with self._transaction(now) as (db, moment):
-            band = price_band(moment)
+            band = wake_band(moment)
             for p in self.policies.values():
                 if not p.owner:
                     continue
@@ -121,7 +135,7 @@ class Scheduler(BaseScheduler):
         if claim:
             moment = self.clock() if now is None else now
             with self._transaction(moment) as (db, moment):
-                db.execute('INSERT INTO owner_wake_audit VALUES (?,?,?,?,?,NULL)', (event_id, claim.event.chat_id and self._policy(claim.event.chat_id, claim.event.mode).key, price_band(moment), moment, 'awaiting_agent'))
+                db.execute('INSERT INTO owner_wake_audit VALUES (?,?,?,?,?,NULL)', (event_id, claim.event.chat_id and self._policy(claim.event.chat_id, claim.event.mode).key, wake_band(moment), moment, 'awaiting_agent'))
                 db.execute("UPDATE owner_wake_state SET last_wake=?,decision='awaiting_agent',next_due=NULL WHERE chat_key=?", (moment, self._policy(claim.event.chat_id, claim.event.mode).key))
         return claim
 
