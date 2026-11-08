@@ -143,6 +143,9 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
      bindOwnerBilling({collector:billingCollector,getCore:()=>core,agentCtx,agent,chat});
      rotationLite?.register({agent,chat});
      if(chat.owner&&chat.mode==='private'){
+       // Host-local readable copy of agent errors (status pages only show redacted codes).
+       agentCtx.on?.('agent/error',p=>{try{const e=p?.error||{};const text=String(e.message??e).replace(/sk-[A-Za-z0-9]{8,}|Bearer\s+\S+|github_pat_\S+/g,'<redacted>').slice(0,500);
+         fs.appendFileSync(path.join(config.stateDir,'agent-errors.log'),new Date().toISOString()+' '+(e.code||e.name||'Error')+' '+text.replace(/\s+/g,' ')+'\n');}catch{}});
        ownerStatus.bind({agent,bindingId:bridge.state(chat.id).binding}).register(agentCtx,defineTool);
        if(mailbox)agentCtx.systemPrompt?.section?.({name:'claude-mailbox',order:326,text:()=>{
          let unread=[];try{unread=fs.readdirSync(path.join(mailbox,'to-xiaoqian')).filter(f=>f.endsWith('.md'));}catch{}
@@ -170,6 +173,12 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
    }});
  ownerStatus=createOwnerSessionStatus({getManagedSessions:createCoreSessionSource(core),isCurrentOwner:({agent,bindingId})=>
    active()&&core.handles.get(owner.id)?.agent===agent&&core.state(owner.id).binding===bindingId});
+ // Operator acknowledgement: unknown receipts present when this mark is first seen become history.
+ // They keep status 'unknown' and are never replayed; status pages just stop reporting them as blockers.
+ if(typeof config.unknownReviewed==='string'&&config.unknownReviewed){for(const c of config.chats){const s=core.state(c.id);
+   if(s.unknownReviewMark===config.unknownReviewed)continue;
+   for(const v of [...Object.values(s.messages||{}),...Object.values(s.deliveries||{})])if(v.status==='unknown'&&!v.reviewed)v.reviewed=config.unknownReviewed;
+   s.unknownReviewMark=config.unknownReviewed;}core.store.save();}
  core.capabilities.consumeOwnerApproval=input=>ownerIntegrations?.consumeOwnerApproval?.(input);
  ownerTasks?.drain();
  rotationLite=createRotationLite({hostCtx:ctx,getCore:()=>core,config});
