@@ -127,7 +127,11 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
  if(ownerAttachments){requireValue(!ownerServices.attachments,'ATTACHMENT_REGISTRY_CONFLICT');ownerServices={...ownerServices,attachments:ownerAttachments.attachments};}
  if(config.billingCollector?.enabled===true&&!(config.ownerIntegrations?.enabled===true&&config.balance?.enabled===true))throw Error('BILLING_BALANCE_SHIM_INTEGRATION_REQUIRED');
  const billingCollector=config.billingCollector?.enabled===true?createBillingCollector({root:config.billingCollector.root}):null;
- const ownerTasks=config.ownerTasks?.enabled===true?createOwnerTasks({hostCtx:ctx,getCore:()=>core,stateDir:root}):null;
+ // A broken task store or panel disables background tasks only; it must never stop the bridge.
+ const taskNote=(code,e)=>{ctx.logger?.warn?.(code);try{fs.appendFileSync(path.join(root,'loop-errors.log'),new Date().toISOString()+' '+code+' '+(e?.code||'')+' '+String(e?.stack||e).split('\n').slice(0,3).join(' | ')+'\n');}catch{}};
+ let ownerTasks=null;
+ if(config.ownerTasks?.enabled===true)try{ownerTasks=createOwnerTasks({hostCtx:ctx,getCore:()=>core,stateDir:root,config:config.ownerTasks,report:taskNote});}
+ catch(e){taskNote('OWNER_TASKS_DISABLED',e);}
  const ownerRotation=config.rotation?.enabled===true&&config.rotationLite?.enabled!==true?createOwnerRotation({hostCtx:ctx,getCore:()=>core,config}):null;
  const ownerIntegrations=config.ownerIntegrations?.enabled===true?createOwnerIntegrations({hostCtx:ctx,getCore:()=>core,config,services:{...ownerServices,taskShellOrigin:input=>ownerTasks?.shellOrigin(input)}}):null;
  const ownerSupplements=await createOwnerSupplements({getCore:()=>core,config,services:ownerServices});
