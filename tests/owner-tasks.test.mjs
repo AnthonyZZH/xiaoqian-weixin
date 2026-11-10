@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {once} from 'node:events';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
@@ -9,7 +10,9 @@ import {createBridge} from '../src/index.mjs';
 import {digest} from '../src/state.mjs';
 import {OWNER_TASK_TOOLS} from '../src/owner-tasks.mjs';
 
-const repo=fileURLToPath(new URL('../../',import.meta.url));
+// Scratch state lives outside the working tree: in the enclosing .git when there is one, else the OS temp dir.
+const enclosing=path.join(fileURLToPath(new URL('../../',import.meta.url)),'.git');
+const scratch=path.join(fs.existsSync(enclosing)&&fs.statSync(enclosing).isDirectory()?enclosing:fs.realpathSync(os.tmpdir()),'t014-test-');
 const owner={id:'owner',title:'SYNTHETIC OWNER',mode:'private',owner:true};
 const group={id:'group',title:'SYNTHETIC GROUP',mode:'group',owner:false};
 const binding=digest(JSON.stringify([owner.id,owner.title,owner.mode,owner.owner]));
@@ -17,7 +20,7 @@ const turn=()=>new Promise(resolve=>setImmediate(resolve));
 async function settled(fn,label='condition'){for(let i=0;i<300;i++){if(fn())return;await turn();}assert.fail('did not settle: '+label);}
 
 async function fixture(t,options={}){
- const root=fs.mkdtempSync(path.join(repo,'.git','t014-test-')),listeners=new Map(),agents=new Map(),runs=new Map(),calls=[],searches=[],sends=[],order=[];
+ const root=fs.mkdtempSync(scratch),listeners=new Map(),agents=new Map(),runs=new Map(),calls=[],searches=[],sends=[],order=[];
  let bridge,cancelGate,starts=0,disposals=0,flushFail=false,nativeTurn=0;
  const python=process.env.XQ_TEST_PYTHON;
  assert.ok(python,'XQ_TEST_PYTHON required');
@@ -62,7 +65,7 @@ async function fixture(t,options={}){
   bridge.core.resume();await bridge.core.handle('owner');await bridge.core.handle('group');
   return bridge;
  }
- t.after(async()=>{await bridge?.core.close();assert.ok(path.resolve(root).startsWith(path.join(repo,'.git','t014-test-')));fs.rmSync(root,{recursive:true,force:true});});
+ t.after(async()=>{await bridge?.core.close();assert.ok(path.resolve(root).startsWith(scratch));fs.rmSync(root,{recursive:true,force:true});});
  await open();
  const f={root,runs,calls,searches,sends,order,get bridge(){return bridge;},get starts(){return starts;},get disposals(){return disposals;},
   setCancel:p=>cancelGate=p,failFlush:value=>flushFail=value,
