@@ -1,7 +1,8 @@
-import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
+import fs from 'node:fs';
+import {renameRetry} from './state.mjs';import path from 'node:path';import crypto from 'node:crypto';
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 const unknown=code=>Object.assign(Error(code),{uncertain:true});
-const put=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));fs.renameSync(t,p);};
+const put=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));renameRetry(t,p);};
 function unpack(content){const match=content.match(/XQ_ROTATION_DATA_BEGIN\n([A-Za-z0-9+/=\r\n]+)\nXQ_ROTATION_DATA_END/);if(!match)throw Error('ARCHIVE_ENCODING_MISSING');return Buffer.from(match[1].replace(/\s/g,''),'base64');}
 export function createRotationLibrary({adapter,chatId,root,namespace}){
  fs.mkdirSync(root,{recursive:true});

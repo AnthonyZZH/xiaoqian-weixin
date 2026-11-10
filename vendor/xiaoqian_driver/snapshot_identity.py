@@ -15,7 +15,7 @@ def initialize(db):
 def remember_send(db,operation_id,payload):
     chat=payload.get('chat');text=payload.get('text')
     if not isinstance(chat,dict) or not isinstance(text,str):return
-    chat_key=hashlib.sha256(json.dumps(chat,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    chat_key=hashlib.sha256(json.dumps({'name':chat.get('identity') or chat.get('name'),'mode':chat.get('mode')},ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
     body=hashlib.sha256(text.encode()).hexdigest()
     db.execute("INSERT OR IGNORE INTO outbound_identity VALUES(?,?,?,'pending')",(operation_id,chat_key,body))
 

@@ -30,19 +30,29 @@ class SendUnknown(DriverError):
 class Chat:
     name: str
     mode: Literal["private", "group"] = "private"
+    # Stable identity (the configured title). `name` is what WeChat currently shows and may be
+    # renamed; message ids/keys stay bound to identity so a rename never re-ingests old rows.
+    identity: str = ""
 
     def __post_init__(self):
         if not isinstance(self.name, str) or not self.name.strip() or len(self.name) > 256:
             raise ValueError("invalid_chat_name")
         if self.mode not in ("private", "group"):
             raise ValueError("invalid_chat_mode")
+        if not isinstance(self.identity, str) or len(self.identity) > 256:
+            raise ValueError("invalid_chat_identity")
+        if self.identity == self.name:
+            object.__setattr__(self, "identity", "")
 
     @property
     def key(self) -> str:
-        return digest(self.to_dict())
+        return digest({"name": self.identity or self.name, "mode": self.mode})
 
     def to_dict(self) -> dict[str, str]:
-        return {"name": self.name, "mode": self.mode}
+        out = {"name": self.name, "mode": self.mode}
+        if self.identity:
+            out["identity"] = self.identity
+        return out
 
 
 @dataclass(frozen=True)

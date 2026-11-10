@@ -260,7 +260,7 @@ export class WeChatCore {
     requireValue(typeof wakeId==='string'&&wakeId.length>0,'WAKE_ID_REQUIRED');
     const key='wake:'+digest(wakeId);if(s.messages[key])return {status:'duplicate'};
     const h=await this.handle(chatId),nativeMessageId='message-'+crypto.randomUUID();const grantId=this.permits.issue(chatId,{sourceId:wakeId,nativeMessageId,kind:'proactive',wakeId});s.messages[key]={status:'accepting',nativeMessageId,grantId};this.store.save();
-    try{h.agent.followup({id:nativeMessageId,role:'user',content:[{type:'text',text:'主动聊天检查：'+JSON.stringify({reason:context.reason||'opening',idleMinutes:context.idleMinutes,unanswered:context.unanswered})+'。结合本会话判断是否值得说；不值得联系必须调用 wechat_skip；值得联系才调用 wechat_reply。每次检查都必须明确完成决策，不需要向主人询问是否联系。'}],source:{kind:'xiaoqian-initiative'}});await this.flush(h.agent);s.messages[key].status='accepted';s.pendingWake={wakeId,reason:context.reason||'opening'};}
+    try{h.agent.followup({id:nativeMessageId,role:'user',content:[{type:'text',text:'主动聊天检查：'+JSON.stringify({reason:context.reason||'opening',idleMinutes:context.idleMinutes,unanswered:context.unanswered,note:typeof context.note==='string'?context.note.slice(0,600):undefined})+'。结合本会话判断是否值得说；不值得联系必须调用 wechat_skip；值得联系才调用 wechat_reply。每次检查都必须明确完成决策，不需要向主人询问是否联系。'}],source:{kind:'xiaoqian-initiative'}});await this.flush(h.agent);s.messages[key].status='accepted';s.pendingWake={wakeId,reason:context.reason||'opening'};}
     catch(e){s.messages[key].status='unknown';this.permits.close(chatId,grantId,'followup-unknown');this.store.save();throw e;}
     this.store.audit('WAKE',chat.id);return {status:'ok'};
   });}

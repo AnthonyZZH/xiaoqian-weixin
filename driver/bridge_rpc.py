@@ -42,7 +42,7 @@ def serve():
                     config = args["config"]
                     if config.get("mode") not in ("fake", "real"):
                         raise ValueError("invalid_mode")
-                    chats = {row["id"]: Chat(row["title"], row["mode"])
+                    chats = {row["id"]: Chat(row.get("wechatName") or row["title"], row["mode"], row["title"])
                              for row in config["chats"]}
                     trusted_owner = {row["id"] for row in config["chats"] if row.get("owner") is True}
                     if len(chats) != len(config["chats"]):
@@ -51,7 +51,7 @@ def serve():
                         raise ValueError("real_mode_not_authorized")
                     owner_row=next((row for row in config["chats"] if row.get("owner") is True),None)
                     options = DriverConfig(
-                        owner_chat={"name":owner_row["title"],"mode":owner_row["mode"]} if owner_row else None,
+                        owner_chat=chats[owner_row["id"]].to_dict() if owner_row else None,
                         native_saved_file_profile=config.get("native_saved_file_profile"),
                         native_image_profile=config.get("native_image_profile"),
                         mode=config["mode"], allow_real=config.get("allow_real") is True,

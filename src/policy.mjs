@@ -8,9 +8,12 @@ export function validateChats(chats) {
     requireValue(!['__proto__','constructor','prototype'].includes(c.id),'CHAT_ID_RESERVED');
     requireValue(!ids.has(c.id)&&typeof c.title==='string'&&c.title.length>0&&c.title.length<=200,'CHAT_INVALID');
     requireValue(['private','group'].includes(c.mode),'CHAT_MODE_INVALID');
-    requireValue(!titles.has(c.mode+':'+c.title),'CHAT_AMBIGUOUS');
+    // wechatName: the name WeChat currently shows (groups get renamed). title stays the fixed identity.
+    requireValue(c.wechatName===undefined||typeof c.wechatName==='string'&&c.wechatName.trim().length>0&&c.wechatName.length<=200,'CHAT_WECHAT_NAME_INVALID');
+    const shown=c.wechatName||c.title;
+    requireValue(!titles.has(c.mode+':'+c.title)&&!titles.has(c.mode+':'+shown),'CHAT_AMBIGUOUS');
     requireValue(!c.owner||c.mode==='private','GROUP_OWNER_DENIED');
-    if(c.owner)owners++; ids.add(c.id);titles.add(c.mode+':'+c.title);
+    if(c.owner)owners++; ids.add(c.id);titles.add(c.mode+':'+c.title);titles.add(c.mode+':'+shown);
   }
   requireValue(owners<=1,'MULTIPLE_OWNERS_DENIED');
   return new Map(chats.map(c=>[c.id,Object.freeze({...c,owner:c.owner===true})]));

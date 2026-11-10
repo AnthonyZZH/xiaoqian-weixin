@@ -1,7 +1,7 @@
 import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
-import {atomicWrite} from './state.mjs';
+import {atomicWrite,renameRetry} from './state.mjs';
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
-const put=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));fs.renameSync(t,p);};
+const put=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));renameRetry(t,p);};
 export function rotationRevision(core,chatId){const s=core.state(chatId);return sha(JSON.stringify({sessionId:s.sessionId,binding:s.binding,messages:s.messages,deliveries:s.deliveries,persona:core.features?.persona(chatId),permissions:core.capabilities.ownerNativeTools||[],pendingWake:s.pendingWake||null,nativeSeq:core.handles.get(chatId)?.agent.session.seq,taskVersion:core.rotationTasksVersion?.()||null}));}
 export function createRotationSession({core,chatId,root,hostCtx}){
  fs.mkdirSync(root,{recursive:true});const candidates=new Map(),retirements=new Set(),retirementErrors=[];

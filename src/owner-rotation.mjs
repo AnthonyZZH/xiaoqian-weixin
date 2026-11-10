@@ -1,9 +1,10 @@
-import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';
+import fs from 'node:fs';
+import {renameRetry} from './state.mjs';import path from 'node:path';import crypto from 'node:crypto';
 import {runRotationWorker} from './rotation-rpc.mjs';import {createRotationLibrary} from './rotation-library.mjs';import {createRotationSession,rotationRevision} from './rotation-session.mjs';
 import {createMainLibraryAdapter} from '../vendor/library-adapter/index.mjs';
 import {WeChatCore} from './core.mjs';
 const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
-const save=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));fs.renameSync(t,p);};
+const save=(p,v)=>{const t=p+'.tmp';fs.writeFileSync(t,JSON.stringify(v));renameRetry(t,p);};
 const PRICE_SOURCE='https://api-docs.deepseek.com/zh-cn/quick_start/pricing/';
 export function createOwnerRotation({hostCtx,getCore,config,defineTool}){
  const root=config.rotation.root;fs.mkdirSync(root,{recursive:true});const entries=new Map();let closed=false,busy=false,checked=false;

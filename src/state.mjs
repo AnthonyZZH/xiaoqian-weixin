@@ -33,9 +33,15 @@ export function validateState(v){
  for(const row of v.audit)assert(plain(row)&&typeof row.code==='string'&&row.code.length<=100&&typeof row.at==='string'&&Number.isFinite(Date.parse(row.at))&&typeof row.chat==='string'&&/^[a-f0-9]{64}$/.test(row.chat));
  return v;
 }
+// Windows: renaming over a file another process has open (antivirus, a reader) fails
+// transiently with EPERM/EACCES/EBUSY. Retry briefly instead of failing the whole poll.
+const RENAME_RETRY=new Set(['EPERM','EACCES','EBUSY']);
+export function renameRetry(from,to,{tries=8,sleep=ms=>Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms)}={}){
+ for(let i=0;;i++){try{return fs.renameSync(from,to);}catch(e){if(!RENAME_RETRY.has(e?.code)||i>=tries-1)throw e;sleep(Math.min(200,10*2**i));}}
+}
 export function atomicWrite(file,value){
  fs.mkdirSync(path.dirname(file),{recursive:true});const tmp=file+'.'+crypto.randomUUID()+'.tmp';let fd;
- try{fd=fs.openSync(tmp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify(value,null,2),'utf8');fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.renameSync(tmp,file);}
+ try{fd=fs.openSync(tmp,'wx',0o600);fs.writeFileSync(fd,JSON.stringify(value,null,2),'utf8');fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;renameRetry(tmp,file);}
  finally{if(fd!==undefined)fs.closeSync(fd);if(fs.existsSync(tmp))fs.unlinkSync(tmp);}
 }
 export class State{

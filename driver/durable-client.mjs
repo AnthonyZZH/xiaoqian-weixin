@@ -85,7 +85,7 @@ export class DurableDriverClient {
       schedule_path:this.options.schedulePath,
       time_zone:this.options.timeZone||'Asia/Shanghai',
       initiative:this.options.initiative||{},
-      chats:[...this.targets.values()].map(c=>({id:c.id,title:c.title,mode:c.mode,owner:c.owner===true})),
+      chats:[...this.targets.values()].map(c=>({id:c.id,title:c.title,mode:c.mode,owner:c.owner===true,...(c.wechatName?{wechatName:c.wechatName}:{})})),
       native_saved_files_enabled:this.options.nativeSavedFilesEnabled===true,
       native_saved_file_profile:this.options.nativeSavedFileProfile,
       native_image_profile:this.options.nativeImageProfile,
