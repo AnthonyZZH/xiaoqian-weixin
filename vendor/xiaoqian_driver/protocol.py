@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 VERSION = 1
-MAX_LINE = 2 * 1024 * 1024
+MAX_LINE = 6 * 1024 * 1024
 Outcome = Literal["success", "failed", "unknown"]
 
 

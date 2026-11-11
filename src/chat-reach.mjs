@@ -11,7 +11,7 @@ export function createReachWatch({chats,audit,wake,report,ms=180000,minFailures=
     if(v.notified||v.failures<minFailures||now()-v.since<limit)return;
     v.notified=true;report('CHAT_UNREACHABLE',{code:v.code,stack:c.id+' shown='+v.shown});try{audit('CHAT_UNREACHABLE',c.id,{reason:v.code});}catch{}
     if(owner&&owner.id!==c.id)Promise.resolve().then(()=>wake(owner.id,{wakeId:'unreachable:'+c.id+':'+v.since,reason:'chat_unreachable',
-      note:'聊天「'+v.shown+'」已经连续 '+Math.round(limit/60000)+' 分钟打不开（'+v.code+'），多半是群被改名了。请用 wechat_reply 告诉主人这件事和解决方法：在小千微信里给这个群设备注为「'+v.shown+'」，或者让 Claude 把配置里的 wechatName 改成新群名。'})).catch(e=>report('CHAT_UNREACHABLE_NOTIFY_FAILED',e));
+      note:'聊天「'+v.shown+'」已经连续 '+Math.round(limit/60000)+' 分钟打不开（'+v.code+'），可能是群被改名了而且没能自动认出新名字。请用 wechat_reply 告诉主人这件事和解决方法：在小千的微信里给这个群设一个备注（备注不会随群名变化），或者让 Claude 把配置里的 wechatName 改成新群名。'})).catch(e=>report('CHAT_UNREACHABLE_NOTIFY_FAILED',e));
   };
   return {reach,watch,down:()=>Object.values(reach).filter(v=>v.notified)};
 }

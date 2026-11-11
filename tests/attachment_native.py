@@ -10,9 +10,10 @@ import unittest
 
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / 'vendor'))
-from xiaoqian_driver.protocol import Chat
+from xiaoqian_driver.protocol import Chat, DriverError
 from xiaoqian_driver.image_native import NativeImageBroker, ImageError
 from xiaoqian_driver.native_image_surface import NativeUIASurface, NativeRowImageSurface, rectangle
+from xiaoqian_driver.row_image_geometry import tight_photo
 from xiaoqian_driver.native_saved_file_location import normalize_location
 from xiaoqian_driver.saved_file_identity import WindowsFile, read_saved, Rejected
 from xiaoqian_driver.snapshot_identity import token
@@ -33,6 +34,7 @@ class Control:
 class API:
     def __init__(self, image):
         self.image, self.captures, self.clear = image, [], True
+        self.sparse = False
     def window_pid(self, hwnd): return 7
     def foreground_window(self): return 1
     def window_dpi(self, hwnd): return 96
@@ -43,8 +45,10 @@ class API:
         pixels = bytearray()
         for y in range(b['y'], b['y']+b['height']):
             for x in range(b['x'], b['x']+b['width']):
-                pixels.extend(((x*19 % 200, y*13 % 200, (x+y)*7 % 200, 255)
-                               if 74 <= x < 106 and 30 <= y < 62 else (240, 240, 240, 255)))
+                content = (74 <= x < 106 and 30 <= y < 62 and
+                           (not self.sparse or 84 <= x < 96 or 40 <= y < 52))
+                pixels.extend((x*19 % 200, y*13 % 200, (x+y)*7 % 200, 255)
+                              if content else (240, 240, 240, 255))
         return bytes(pixels)
 
 
@@ -75,6 +79,25 @@ def surface(kind):
 
 
 class NativeImages(unittest.TestCase):
+    def test_sparse_owner_photo_is_delivered_but_sparse_sticker_is_refused(self):
+        photo, _, chat, row, api = surface('photo')
+        api.sparse = True
+        proof = photo.resolve(photo.observe(chat, row))
+        self.assertEqual(photo.capture(proof)['bounds'], rectangle(api.image))
+        sticker, _, chat, row, api = surface('sticker')
+        api.sparse = True
+        with self.assertRaisesRegex((DriverError, ValueError), 'IMAGE_CONTENT_SPARSE_OR_MIXED'):
+            sticker.resolve(sticker.observe(chat, row))
+
+    def test_sparse_photo_mode_keeps_edge_and_loading_checks(self):
+        bounds = dict(x=0, y=0, width=40, height=40)
+        pixels = bytearray((240, 240, 240, 255))*1600
+        with self.assertRaisesRegex((DriverError, ValueError), 'IMAGE_EMPTY_OR_LOADING'):
+            tight_photo(bounds, bytes(pixels), 96, verified_owner_photo=True)
+        pixels[:4] = (40, 40, 40, 255)
+        with self.assertRaisesRegex((DriverError, ValueError), 'IMAGE_CONTENT_TOUCHES_GUARD'):
+            tight_photo(bounds, bytes(pixels), 96, verified_owner_photo=True)
+
     def test_exact_crop_and_sticker_single_frame(self):
         for kind in ('control', 'photo', 'sticker'):
             with self.subTest(kind=kind):
@@ -135,7 +158,7 @@ class NativeImages(unittest.TestCase):
 @unittest.skipUnless(os.name == 'nt', 'Native file handles require Windows')
 class NativeFiles(unittest.TestCase):
     def test_read_identity_locks_and_limits(self):
-        with tempfile.TemporaryDirectory(dir=APP / 'test') as temporary:
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as temporary:
             root = Path(temporary)
             target = root / 'synthetic.txt'
             target.write_bytes(b'SYNTHETIC')

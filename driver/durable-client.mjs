@@ -20,6 +20,13 @@ export class DurableDriverClient {
   pause(){this.paused=true;this.queue=this.queue.then(()=>this._gracefulStop()).catch(()=>this._stop('DRIVER_PAUSED'));}
   resume(){if(this.closed)throw new Error('DRIVER_CLOSED');this.paused=false;}
   async close(){if(this.closed)return;this.closed=true;await this.queue;await this._gracefulStop();}
+  /** A chat's WeChat name changed. The driver process holds the old name, so it is stopped; the next call starts a fresh one. */
+  rename(id,wechatName){
+    const target=this.targets.get(id);if(!target)return Promise.reject(new Error('DRIVER_TARGET_DENIED'));
+    if(typeof wechatName!=='string'||!wechatName.trim()||wechatName.length>200)return Promise.reject(new Error('CHAT_WECHAT_NAME_INVALID'));
+    const {wechatName:_old,...rest}=target;this.targets.set(id,wechatName===target.title?rest:{...rest,wechatName});
+    this.queue=this.queue.then(()=>this._gracefulStop()).catch(()=>this._stop('DRIVER_RENAMED'));return this.queue;
+  }
   call(operation,args={}){
     let captured;
     try{captured=JSON.parse(JSON.stringify(args));}catch{return Promise.resolve({status:'rejected',code:'ARGUMENT_INVALID'});}
@@ -64,7 +71,7 @@ export class DurableDriverClient {
     const lines=createInterface({input:child.stdout});
     lines.on('line',line=>{
       if(this.child!==child)return;
-      if(line.length>2*1024*1024){this._stop('FRAME_TOO_LARGE');return;}
+      if(line.length>6*1024*1024){this._stop('FRAME_TOO_LARGE');return;}
       let row;try{row=JSON.parse(line);}catch{this._stop('BAD_JSON');return;}
       const pending=this.pending;
       if(!pending||row.id!==pending.id||!['ok','rejected','unknown','error'].includes(row.status)){
@@ -107,7 +114,7 @@ export class DurableDriverClient {
       });
     });
   }
-  withNativeImageLease(callback,{timeoutMs=8000}={}){
+  withNativeImageLease(callback,{timeoutMs=15000}={}){
     return this._nativeLease(callback,timeoutMs,'IMAGE',['image_inspect','image_capture','image_current'],100);
   }
   withNativeFileLease(callback,{timeoutMs=15000}={}){

@@ -8,6 +8,7 @@ import {Store} from '../vendor/task-engine/store.mjs';
 import {Engine} from '../vendor/task-engine/engine.mjs';
 import {normalizePlan} from '../vendor/task-engine/plan.mjs';
 import {createPanel} from '../vendor/task-engine/panel.mjs';
+import {createPanelControl} from './panel-control.mjs';
 
 export const OWNER_TASK_TOOLS=['task_start','task_list','task_cancel','task_retry','task_result'];
 const delegated=['owner_powershell','owner_command','owner_file_read','owner_file_write','owner_search','owner_fetch'];
@@ -122,7 +123,9 @@ export function createOwnerTasks({hostCtx,getCore,stateDir,config={},report=()=>
  if(config.panel?.enabled===true)try{
   const file=path.join(dir,'panel-token');let token=config.panel.token||(fs.existsSync(file)?fs.readFileSync(file,'utf8').trim():'');
   if(!token){token=crypto.randomBytes(24).toString('base64url');fs.writeFileSync(file,token,{mode:0o600});}
-  panel=createPanel({engine,store,token,host:config.panel.host||'127.0.0.1',port:config.panel.port??8790,onError:e=>note('OWNER_TASK_PANEL',e)});
+  // With control enabled the token holder can also pause/resume, cancel/retry tasks and (if file paths are configured) change models.
+  const control=config.panel.control?.enabled===true?createPanelControl({getCore,engine,stateDir,options:config.panel.control}):null;
+  panel=createPanel({engine,store,token,control,host:config.panel.host||'127.0.0.1',port:config.panel.port??8790,onError:e=>note('OWNER_TASK_PANEL',e)});
   if(config.panel.publicUrl)panelUrl=String(config.panel.publicUrl).replace(/\/+$/,'')+'/'+token+'/';
  }catch(e){note('OWNER_TASK_PANEL',e);}
 
@@ -204,7 +207,7 @@ export function createOwnerTasks({hostCtx,getCore,stateDir,config={},report=()=>
     task_list:{},task_cancel:{id},task_retry:{id,stepId:str('只重试这一步；省略则重试所有失败的步骤')},task_result:{id,stepId:str('取这一步的产物；省略则取最终交付')}};
    for(const name of OWNER_TASK_TOOLS)agentCtx.tools.register(defineTool({name,description:describe[name],parameters:parameters[name],
     output:{schema:{type:'json'},render:(_args,value)=>[{type:'text',text:JSON.stringify(value)}]},execute(args,exec){auth(e,exec);return operations[name](e,args,exec);}}));
-   agentCtx.systemPrompt.section({name:'owner-tasks-guide',order:317,text:()=>GUIDE+(panelUrl?'主人可以在手机浏览器打开任务面板看进度（只读）：'+panelUrl+' 。主人问面板地址时原样发给他，不要发到群里。':'')});
+   agentCtx.systemPrompt.section({name:'owner-tasks-guide',order:317,text:()=>GUIDE+(panelUrl?'主人可以在手机浏览器打开控制面板（看任务进度、暂停恢复、换模型）：'+panelUrl+' 。主人问面板地址时原样发给他，不要发到群里。':'')});
   },
   async close(){
    closed=true;const runs=[...live.values()];

@@ -16,6 +16,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {WeChatCore} from './core.mjs';
 import {DurableDriverClient} from '../driver/durable-client.mjs';
 import {createReachWatch} from './chat-reach.mjs';
+import {applyChatAliases,createRenameFollower} from './chat-rename.mjs';
 import {FeatureStore,scopedDirectory} from './features.mjs';
 import {InitiativeStore} from './initiative.mjs';
 import {OwnerDecisionBridge,expireOwnerWake} from './owner-decision-bridge.mjs';
@@ -61,7 +62,7 @@ const fields={
 };
 const descriptions={
  wechat_memory_confirm:'Confirm a fact grounded in an exact original quote from this owner chat. Cross-chat citations are denied.',
- wechat_reply:'给当前已绑定微信会话发送文字和/或目录表情。不要在普通回答里假装发送。',
+ wechat_reply:'给当前已绑定微信会话发送文字和/或目录表情。要分条发文字，可以在一次调用的 text 里用换行分隔。多次调用时分别核对 status 和 deliveryId；grantId 表示回复授权，同一轮可以相同。结果为 unknown 时不要重发。',
  wechat_skip:'这次主动检查无值得说的话，明确跳过并重新安排主动时间。',
  wechat_status:'读取当前会话状态，不读取其他会话正文。',
  wechat_memory_read:'读取当前会话自己的社交记忆。',
@@ -80,14 +81,20 @@ const descriptions={
 };
 export async function createBridge(ctx,config,{defineTool,driver,capabilities={},ownerServices={},savedFileHost,imageHost,savedFileWorker}={}) {
  requireValue(config&&Array.isArray(config.chats),'CONFIG_INVALID');
- config={...config,chats:[...validateChats(config.chats).values()]};
  requireValue(path.isAbsolute(config.stateDir),'ABSOLUTE_STATE_DIR_REQUIRED');
+ // Group names learned by following a rename apply over the configuration; if they no longer validate, the configuration stands.
+ const configuredNames=new Map(config.chats.map(c=>[c?.id,c?.wechatName||c?.title]));
+ let chatList;try{chatList=[...validateChats(applyChatAliases(config.chats,path.resolve(config.stateDir))).values()];}catch{chatList=[...validateChats(config.chats).values()];}
+ config={...config,chats:chatList};
  requireValue(config.mode==='mock'||config.mode==='live','MODE_REQUIRED');
  requireValue(config.mode!=='live'||config.liveEnabled===true,'LIVE_NOT_APPROVED');
  validatePlatform(config.mode);
  const root=path.resolve(config.stateDir);
- const generatedRoot=config.forge?.enabled===true?scopedDirectory(root,'generated'):path.join(root,'generated');
- const mediaImportRoots=[...(config.mediaImportRoots||[]),...(config.forge?.enabled===true?[generatedRoot]:[])];
+ // A model served on this machine usually needs no key, but the provider adapter wants the variable to exist.
+ if(config.model?.provider==='xq-custom'&&!process.env.XQ_CUSTOM_LLM_API_KEY)process.env.XQ_CUSTOM_LLM_API_KEY='not-needed';
+ const drawing=config.forge?.enabled===true||config.draw?.enabled===true;
+ const generatedRoot=drawing?scopedDirectory(root,'generated'):path.join(root,'generated');
+ const mediaImportRoots=[...(config.mediaImportRoots||[]),...(drawing?[generatedRoot]:[])];
  capabilities={...capabilities,ownerNativeTools:config.ownerNativeTools||capabilities.ownerNativeTools||[]};
  const features=new FeatureStore({stateDir:root,chats:config.chats});
  requireValue(config.driverRpcPath===undefined||path.isAbsolute(config.driverRpcPath),'ABSOLUTE_DRIVER_RPC_PATH_REQUIRED');
@@ -190,7 +197,7 @@ export async function createBridge(ctx,config,{defineTool,driver,capabilities={}
  ownerTasks?.drain();
  rotationLite=createRotationLite({hostCtx:ctx,getCore:()=>core,config});
  const originalClose=core.close.bind(core);let closing;core.close=()=>closing??=(async()=>{await ownerTasks?.close();ownerAttachments?.close();await rotationLite.close();billingCollector?.close();ownerSupplements.close();ownerRotation?.close();await ownerIntegrations?.close();return originalClose();})();
- return {reachRef,core,driver:ui,media,features,evidenceMemory,initiative,importer,taskManager,ownerTasks,ownerSupplements,ownerRotation,rotationLite,ownerIntegrations,billingCollector,ownerAttachments,mediaInputs:{autoImages,autoFiles,groupImages:false}};
+ return {configuredNames,reachRef,core,driver:ui,media,features,evidenceMemory,initiative,importer,taskManager,ownerTasks,ownerSupplements,ownerRotation,rotationLite,ownerIntegrations,billingCollector,ownerAttachments,mediaInputs:{autoImages,autoFiles,groupImages:false}};
 }
 export async function apply(ctx,config={}) {
  if(config.enabled!==true)return;
@@ -201,12 +208,14 @@ export async function apply(ctx,config={}) {
  let lastFail='';const report=(code,e)=>{ctx.logger?.warn?.(code);const line=code+' '+(e?.code||'')+' '+String(e?.stack||e).split('\n').slice(0,3).join(' | ');
    if(line!==lastFail){lastFail=line;try{fs.appendFileSync(path.join(config.stateDir,'loop-errors.log'),new Date().toISOString()+' '+line+'\n');}catch{}}};
  const reachWatch=createReachWatch({chats:config.chats,audit:(...a)=>bridge.core.store.audit(...a),wake:(...a)=>bridge.core.wake(...a),report,ms:config.unreachableAlertMs});bridge.reachRef.down=reachWatch.down;
+ const renameFollower=createRenameFollower({chats:[...bridge.core.chats.values()],configured:bridge.configuredNames,stateDir:path.resolve(config.stateDir),driver:bridge.driver,
+   audit:(...a)=>bridge.core.store.audit(...a),wake:(...a)=>bridge.core.wake(...a),report});
  ctx.effect(()=>{
    // These timers only fetch UI events/check persisted clocks; they never call a model.
    const poll=setInterval(async()=>{
      if(stopped||polling||bridge.core.store.data.paused)return;
      polling=true;
-     try{for(const c of config.chats){if(stopped)break;reachWatch.watch(c,await bridge.core.poll(c.id));}}
+     try{for(const c of bridge.core.chats.values()){if(stopped)break;const polled=await bridge.core.poll(c.id);reachWatch.watch(c,polled);await renameFollower.observe(c,polled);}}
      catch(e){report('WECHAT_POLL_FAILED',e);}finally{polling=false;}
    },Math.max(500,config.pollMs||2000));
    const tick=setInterval(async()=>{

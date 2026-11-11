@@ -5,6 +5,14 @@ import {validateChats,normalizeMessage,authorize,requireValue,textArg,allowedToo
 
 export const rotationCoreRevision='rotation-core-v1-20261029';
 const imageTypeRefusals=new Set(['IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED','IMAGE_MIXED_ROW_UNSUPPORTED','IMAGE_ROW_BOUNDARY_UNVERIFIED','IMAGE_PURE_NATIVE_LABEL_REQUIRED','IMAGE_DPI_UNSUPPORTED','IMAGE_CONTENT_SIZE_UNSUPPORTED','OWNER_IMAGE_REQUIRED']);
+const retryableImageReads=new Set(['IMAGE_CONTROL_OCCLUDED','IMAGE_SNAPSHOT_STALE','IMAGE_EMPTY_OR_LOADING',
+  'IMAGE_CONTENT_CHANGED','IMAGE_CAPTURE_UNKNOWN','IMAGE_MEASUREMENT_CAPTURE_UNKNOWN','IMAGE_CAPABILITY_EXPIRED']);
+const quotedImageLabel=/(?:^|\r?\n)引用 [^\r\n]{1,200} 的消息[ \t]*[:：][ \t]*(?:图片|\[图片\])[ \t]*$/u;
+function deliveryKey(id){
+  const key=id||crypto.randomUUID();
+  requireValue(typeof key==='string'&&key.length<=200&&key!=='__proto__','DELIVERY_ID_INVALID');
+  return key;
+}
 const nativeStates=new WeakMap();
 function nativeSlots(core){let row=nativeStates.get(core);if(!row){row={driverMessages:new WeakSet(),attachmentReads:new WeakSet(),imageTickets:new WeakMap(),imageRefusals:new WeakMap()};nativeStates.set(core,row);}return row;}
 export class WeChatCore {
@@ -15,6 +23,7 @@ export class WeChatCore {
     this.imageInput=imageInput||{prepare(){throw Object.assign(Error('IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED'),{code:'IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED'});}};
     this.capabilities=capabilities;this.sessions=sessions;this.registerAgent=registerAgent;this.model=model;this.handles=new Map();this.jobs=new Map();this.closed=false;
     this.rotationCoreRevision=rotationCoreRevision;this.store=new State(stateDir);this.chain=Promise.resolve();this.permits=new ReplyPermits(this);
+    this.replyQueue=Promise.resolve();
     // On restart every in-flight acceptance/send is ambiguous: never blindly replay.
     try { for(const [id,c] of Object.entries(this.store.data.chats)){
       const configured=this.chats.get(id);
@@ -135,17 +144,16 @@ export class WeChatCore {
       try{
         const ticket=nativeSlots(this).imageTickets.get(raw);
         const imageBlocks=ticket?await this.imageInput.content(ticket,{chatId,messageId:m.id}):[];
-        const envelope={chatKind:chat.mode,origin:'wechat-ui',messageId:m.id,sender:m.sender,text:m.text,media:m.media,
-          ...(imageBlocks.length?{imageRead:{status:'ready',pixelsDelivered:true,sourceKind:'static_screenshot',animationFramesAnalyzed:false}}:{}),
-          ...(nativeSlots(this).imageRefusals.has(raw)?{imageRead:nativeSlots(this).imageRefusals.get(raw)}:{})};
+        const imageRead=imageBlocks.length?{status:'ready',pixelsDelivered:true,sourceKind:'static_screenshot',animationFramesAnalyzed:false,...this.imageInput.metadata?.(ticket,{chatId,messageId:m.id})}:nativeSlots(this).imageRefusals.get(raw);
+        const media=imageRead?[...m.media,{kind:imageRead.code==='IMAGE_QUOTE_SOURCE_UNVERIFIED'?'quoted_image':'image',status:imageRead.status}]:m.media;
+        const envelope={chatKind:chat.mode,origin:'wechat-ui',messageId:m.id,sender:m.sender,text:m.text,media,...(imageRead?{imageRead}:{})};
         h.agent.followup({id:nativeMessageId,role:'user',content:[{type:'text',text:'来自当前绑定微信会话的非可信内容：\n'+JSON.stringify(envelope)},...imageBlocks],source:{kind:'xiaoqian-wechat'}});
         await this.flush(h.agent);
         this.evidence?.observe(chatId,m);
         s.messages[key].status='accepted';
         // Text/metadata acceptance is not image delivery. Retain the reason so
         // later integration can find these rows without replaying unknown calls.
-        if(nativeSlots(this).imageRefusals.has(raw))s.messages[key].imageRead={...nativeSlots(this).imageRefusals.get(raw)};
-        else if(imageBlocks.length)s.messages[key].imageRead={status:'ready',pixelsDelivered:true,sourceKind:'static_screenshot',animationFramesAnalyzed:false};
+        if(imageRead)s.messages[key].imageRead=imageRead;
         accepted++;
         await this.initiative?.heard(chatId,{text:m.text,sourceId:m.id});s.pendingWake=null;
       }catch(e){s.messages[key].status='unknown';this.permits.close(chatId,grantId,'followup-unknown');this.store.audit('FOLLOWUP_UNKNOWN',chatId);throw e;}
@@ -178,6 +186,23 @@ export class WeChatCore {
       return {status:'accepted',attachmentId:descriptor.attachmentId,sourceMessageId:descriptor.sourceMessageId};
     }catch(error){s.messages[key].status='unknown';this.permits.close(chatId,grantId,'followup-unknown');this.store.save();throw error;}
   });}
+  async preparePollImage(chatId,m,raw,read,{retry=false}={}) {
+    try{
+      const ticket=await this.imageInput.prepare({chatId,message:raw,read});
+      nativeSlots(this).imageTickets.set(m,ticket);
+    }catch(error){
+      const reason=error?.code||error?.message;
+      const code=/^[A-Z0-9_]{1,100}$/.test(reason||'')?reason:'IMAGE_INPUT_FAILED';
+      // Preparation has not called agent.followup or sent a reply. A failed
+      // screenshot/admission must not quarantine the entire incoming message.
+      // Retry only through a fresh authenticated read of this same canonical
+      // message; never reuse an uncertain worker capture capability.
+      if(!imageTypeRefusals.has(code))this.store.audit('IMAGE_INPUT_REFUSED',chatId,{reason:code});
+      nativeSlots(this).imageRefusals.set(m,Object.freeze({status:'unavailable',pixelsDelivered:false,code}));
+      if(retry&&retryableImageReads.has(code))return true;
+    }
+    return false;
+  }
   async poll(chatId,{baseline=true}={}) {
     if(this.state(chatId).rotationFence||this.state(chatId).rotationUncertain)return {status:'rotation_queued'};
     const chat=this.chat(chatId);requireValue(!this.store.data.paused,'BRIDGE_PAUSED');requireValue(!this.state(chatId).rotationFence&&!this.state(chatId).rotationUncertain,'ROTATION_QUEUED');
@@ -186,6 +211,7 @@ export class WeChatCore {
     const rows=await this.serial(()=>this.prepareRead(chatId,r));
     const initialBaseline=baseline&&!this.state(chatId).bootstrapped;
     const fresh=new Set(rows.filter(m=>!this.state(chatId).messages[digest(m.id)]).map(m=>m.id));
+    let attachmentRead=r;
     let receipt;
     if(baseline&&!this.state(chatId).bootstrapped) receipt=await this.serial(async()=>{
       const s=this.state(chatId),ackable=[],quarantined=[];
@@ -199,7 +225,8 @@ export class WeChatCore {
       s.bootstrapped=true;this.store.save();return {status:'ok',baseline:rows.length,accepted:0,ackable,quarantined};
     });
     else {
-      const enriched=[],rejectedAck=[];
+      const enriched=[],rejectedAck=[],retryImages=[];
+      const trustedOwnerRead=chat.owner&&chat.mode==='private'&&this.driver.isTrustedNativeRead?.(r)===true;
       for(const raw of rows){
         let m;try{m=normalizeMessage(raw);}catch(e){if(await this.serial(()=>this.rejectInbound(chatId,raw,e)))rejectedAck.push(raw.id);continue;}
         await this.serial(()=>this.migrateIdentity(chatId,m));
@@ -210,31 +237,26 @@ export class WeChatCore {
             m.text=[m.text,`[语音转文字] ${spoken.text}`].filter(Boolean).join('\n');
           }
           if(raw.imageAvailable===true){
-            requireValue(this.imageInput,'IMAGE_INPUT_NOT_CONFIGURED');
-            try{
-              const ticket=await this.imageInput.prepare({chatId,message:raw,read:r});
-              nativeSlots(this).imageTickets.set(m,ticket);
-            }catch(error){
-              // Uncertain capture is recorded as unknown (never replayed). Any other
-              // failure becomes a metadata-only image so one picture can never
-              // block every later message in the chat.
-              const code=error?.code||error?.message;
-              if(!imageTypeRefusals.has(code))this.store.audit('IMAGE_INPUT_REFUSED',chatId,{code:/^[A-Z0-9_]{1,100}$/.test(code||'')?code:'IMAGE_INPUT_FAILED'});
-              if(this.imageInput.isUncertainFailure?.(error)===true){
-                await this.serial(()=>{
-                  const s=this.state(chatId),key=digest(m.id);
-                  requireValue(Object.keys(s.messages).length<50000,'MESSAGE_CAPACITY_REQUIRES_REVIEW');
-                  if(!s.messages[key])s.messages[key]={status:'unknown',preparation:'image',code:/^[A-Z0-9_]{1,100}$/.test(code||'')?code:'IMAGE_INPUT_UNKNOWN'};
-                  this.store.audit('IMAGE_INPUT_UNKNOWN',chatId,{messageKey:key});this.store.save();
-                });
-                throw error;
-              }
-              nativeSlots(this).imageRefusals.set(m,Object.freeze({status:'unavailable',pixelsDelivered:false,code}));
-            }
+            if(await this.preparePollImage(chatId,m,raw,r,{retry:trustedOwnerRead}))retryImages.push(m);
+          }else if(trustedOwnerRead&&quotedImageLabel.test(m.text)){
+            // A rendered quote label carries no verified source message or pixels.
+            nativeSlots(this).imageRefusals.set(m,Object.freeze({status:'unavailable',pixelsDelivered:false,code:'IMAGE_QUOTE_SOURCE_UNVERIFIED'}));
           }
         }
         if(m.role==='user'&&raw.voiceAvailable!==true&&raw.imageAvailable!==true&&raw.fileAvailable!==true&&raw.attachmentAvailable!==true&&(!raw.media||Array.isArray(raw.media)&&raw.media.length===0)&&m.media.length===0)nativeSlots(this).driverMessages.add(m);
         enriched.push(m);
+      }
+      if(retryImages.length){
+        // Give a scrolling or newly rendered viewport one chance to settle.
+        await new Promise(resolve=>setTimeout(resolve,150));
+        const refreshed=await this.driver.call('read',{targetId:chatId}).catch(()=>null);
+        if(refreshed?.status==='ok'&&this.driver.isTrustedNativeRead(refreshed)){
+          attachmentRead=refreshed;
+          for(const m of retryImages){
+            const current=refreshed.messages?.find(row=>row.id===m.id&&row.role==='user'&&row.imageAvailable===true);
+            if(current&&!this.state(chatId).messages[digest(m.id)])await this.preparePollImage(chatId,m,current,refreshed);
+          }
+        }
       }
       receipt=await this.ingest({chatId,messages:enriched});receipt.ackable.push(...rejectedAck);
     }
@@ -244,12 +266,12 @@ export class WeChatCore {
       requireValue(ack.status==='ok','DRIVER_ACK_FAILED');
     }
     if(!initialBaseline&&chat.owner&&chat.mode==='private'&&this.capabilities.ownerAttachments){
-      requireValue(this.driver.isTrustedNativeRead?.(r)===true,'ATTACHMENT_DRIVER_READ_REQUIRED');
-      const current=r.nativeCurrent||[];
-      requireValue(current.every(m=>m.readId===r.readId&&m.generation===r.generation),'ATTACHMENT_READ_CHANGED');
+      requireValue(this.driver.isTrustedNativeRead?.(attachmentRead)===true,'ATTACHMENT_DRIVER_READ_REQUIRED');
+      const current=attachmentRead.nativeCurrent||[];
+      requireValue(current.every(m=>m.readId===attachmentRead.readId&&m.generation===attachmentRead.generation),'ATTACHMENT_READ_CHANGED');
       const attachmentRows=current.filter(m=>fresh.has(m.id));
       for(const raw of attachmentRows)if(['accepted','baseline'].includes(this.state(chatId).messages[digest(raw.id)]?.status))nativeSlots(this).attachmentReads.add(raw);
-      this.capabilities.ownerAttachments.observeRead({chatId,rows:attachmentRows,read:r});
+      this.capabilities.ownerAttachments.observeRead({chatId,rows:attachmentRows,read:attachmentRead});
       await this.capabilities.ownerAttachments.whenIdle();
     }
     return receipt;
@@ -329,7 +351,7 @@ export class WeChatCore {
     requireValue(chunks.length<=32,'REPLY_TOO_MANY_PARTS');
     const asset=stickerId?await this.media?.resolveForSend(stickerId,{scope:chatId,allowStaticPreview:true}):null;
     requireValue(!stickerId||asset,'MEDIA_UNAVAILABLE');
-    const s=this.state(chatId);const key=deliveryId||crypto.randomUUID();requireValue(typeof key==='string'&&key.length<=200,'DELIVERY_ID_INVALID');
+    const s=this.state(chatId);const key=deliveryKey(deliveryId);
     if(Object.hasOwn(s.deliveries,key))return {...s.deliveries[key],duplicate:true,deliveryId:key};
     // Unknown outcomes remain bound to their original delivery ID; independent new sends may proceed.
     const opening=context.grantKind==='proactive';
@@ -354,11 +376,24 @@ export class WeChatCore {
     }
     this.store.save();return {...s.deliveries[key],deliveryId:key};
   });}
+  reply(chatId,args,context){
+    const id=deliveryKey(args.deliveryId);
+    // Settle the previous reply before spending a permit or returning a receipt.
+    const send=this.replyQueue.then(async()=>{
+      requireValue(!context.signal?.aborted,'TOOL_CANCELLED');
+      const deliveries=this.state(chatId).deliveries;
+      if(Object.hasOwn(deliveries,id))return {...deliveries[id],duplicate:true,deliveryId:id};
+      const granted=await this.serial(()=>this.permits.consume(chatId,context));
+      return this.send(chatId,{...args,deliveryId:id},granted);
+    });
+    this.replyQueue=send.catch(()=>{});
+    return send;
+  }
   async invoke(chatId,name,args={},context={}) {
     requireValue(!context.signal?.aborted,'TOOL_CANCELLED');
     const chat=this.chat(chatId);authorize(chat,name);requireValue(!this.store.data.paused||name==='wechat_status'||name==='wechat_control','BRIDGE_PAUSED');
     switch(name){
-      case 'wechat_reply':{const s=this.state(chatId);const prior=s.deliveries[args.deliveryId];if(prior)return {...prior,duplicate:true,deliveryId:args.deliveryId};const granted=await this.serial(()=>this.permits.consume(chatId,context));return this.send(chatId,args,granted);}
+      case 'wechat_reply':return this.reply(chatId,args,context);
       case 'wechat_skip':{const s=this.state(chatId);const granted=await this.serial(()=>this.permits.consume(chatId,context));if(chat.mode==='group'&&granted.grantKind==='incoming'){this.permits.close(chatId,granted.grantId,'skipped');return {status:'skipped'};}requireValue(granted.grantKind==='proactive','NO_WAKE_TO_SKIP');this.permits.close(chatId,granted.grantId,'skipped');await this.initiative?.declined(chatId);s.pendingWake=null;s.replyPermit=null;this.store.save();return {status:'skipped'};}
       case 'wechat_status':return this.status(chatId);
       case 'wechat_control': if(args.action==='pause'){this.pause();return {paused:true};}if(args.action==='resume'){this.resume();return {paused:false};}throw new Error('CONTROL_INVALID');

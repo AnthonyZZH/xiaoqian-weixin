@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {atomicJson,readJson} from './features.mjs';
+import {generateImage} from './draw-api.mjs';
 
 function invokeWorker(request,{python='python',workerPath,timeoutMs=20000,signal}={}){
   return new Promise((resolve,reject)=>{
@@ -70,6 +71,20 @@ export function createCapabilities({config={},media,generatedRoot,python='python
       model:config.forge.model,generatedRoot,output,timeout:600},
       {python,workerPath,timeoutMs:620000,signal});
     const row=await media.importOriginal(chatId,answer.path,{description:prompt.slice(0,1000),name:'Generated image'});
+    await media.approve(row.media_id,{scope:chatId});
+    return {status:'ready_to_send',mediaId:row.media_id,animated:false};
+  };
+  // HTTP image generation (hosted API, local OpenAI-compatible server, or SD WebUI), configured from the control panel.
+  if(config.draw?.enabled===true&&!result.draw)result.draw=async({chatId,args,signal})=>{
+    if(!media?.importOriginal)throw new Error('MEDIA_UNAVAILABLE');
+    const prompt=args.prompt;
+    if(typeof prompt!=='string'||!prompt.trim()||prompt.length>4000)throw new Error('DRAW_PROMPT_INVALID');
+    fs.mkdirSync(generatedRoot,{recursive:true});
+    drawQuota(chatId);
+    const image=await generateImage(config.draw,prompt,{signal});
+    const output=path.join(generatedRoot,'draw-'+randomUUID()+'.'+image.extension);
+    fs.writeFileSync(output,image.bytes);
+    const row=await media.importOriginal(chatId,output,{description:prompt.slice(0,1000),name:'Generated image'});
     await media.approve(row.media_id,{scope:chatId});
     return {status:'ready_to_send',mediaId:row.media_id,animated:false};
   };

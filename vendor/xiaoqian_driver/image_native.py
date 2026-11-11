@@ -10,7 +10,7 @@ def require(ok,code):
     if not ok:raise ImageError(code)
 
 class NativeImageBroker:
-    def __init__(self,backend,generation,*,mode,clock=time.monotonic,wall=time.time,ttl=8):
+    def __init__(self,backend,generation,*,mode,clock=time.monotonic,wall=time.time,ttl=15):
         require(type(generation) is int and generation>0,'IMAGE_GENERATION_REQUIRED')
         require(0<ttl<=15,'IMAGE_TTL_INVALID')
         self.backend,self.generation,self.mode=backend,generation,mode
@@ -26,6 +26,9 @@ class NativeImageBroker:
             if profile is not None and self.surface is None:
                 from .native_image_surface import NativeUIASurface,NativeRowImageSurface
                 surface_type=NativeRowImageSurface if profile.get('boundaryMode') in ('pure-photo-row/v1','photo-sticker-row/v2') else NativeUIASurface
+                if profile.get('openPhotoViewer',True) is True and surface_type is NativeRowImageSurface:
+                    from .viewer_image import NativeViewerImageSurface
+                    surface_type=NativeViewerImageSurface
                 self.surface=surface_type(self.backend,profile)
             adapter.native_image_enabled=self.surface is not None
     def begin_read(self,chat,rows):
@@ -49,7 +52,10 @@ class NativeImageBroker:
     def _bounds(proof):
         b=proof.state['imageBounds'];v=proof.state['viewportBounds']
         require(b==v and all(type(b[k]) is int for k in ('x','y','width','height')),'IMAGE_BOUNDS_INVALID')
-        require(0<b['width']<=512 and 0<b['height']<=512 and b['width']*b['height']*4<=MAX_RGBA,'IMAGE_FRAME_LIMIT')
+        if proof.state.get('pixelEncoding')=='encoded-image/v1':
+            require(proof.state.get('sourceKind')=='wechat_viewer_original' and 0<b['width']<=4096 and 0<b['height']<=4096 and b['width']*b['height']<=8_000_000,'IMAGE_FRAME_LIMIT')
+        else:
+            require(0<b['width']<=512 and 0<b['height']<=512 and b['width']*b['height']*4<=MAX_RGBA,'IMAGE_FRAME_LIMIT')
     def _entry(self,chat,args):
         handle=args.get('handle',{});raw_key=handle.get('sourceKey')
         require(chat.key==self.chat_key and handle.get('chatKey')==chat.key,'IMAGE_CHAT_CHANGED')
@@ -79,17 +85,28 @@ class NativeImageBroker:
                 entry.update(proof=proof,deferred=False,state='ready')
             except Exception as error:
                 code=getattr(error,'code',None)
+                if code=='IMAGE_MEASUREMENT_STALE':code='IMAGE_SNAPSHOT_STALE'
                 raise ImageError(code if isinstance(code,str) and re.fullmatch(r'[A-Z0-9_]{1,100}',code) else 'IMAGE_MEASUREMENT_CAPTURE_UNKNOWN') from None
         state=entry['proof'].state
         data={'schema':'xq.native-image/v1','ticket':entry['ticket'],'readId':self.read_id,'generation':self.generation,
               'sourceKey':raw_key,'messageId':entry['canonical'],'expiresAt':entry['expiresAt'],
               'imageBounds':dict(state['imageBounds']),'viewportBounds':dict(state['viewportBounds'])}
+        for key in ('sourceKind','pixelEncoding','mediaType','originalSize'):
+            if key in state:data[key]=state[key]
         if command=='image_inspect':return data
         if command=='image_current':return dict(data,current=True)
         require(entry['state']=='ready','IMAGE_CAPTURE_ALREADY_ATTEMPTED')
         entry['state']='unknown' # Reserve before any screenshot. Unknown is never retried.
         try:
             frame=self.surface.capture(entry['proof'])
+            if state.get('pixelEncoding')=='encoded-image/v1':
+                import hashlib
+                encoded=frame.get('encoded')
+                require(frame.get('bounds')==data['imageBounds'] and frame.get('mediaType')==state['mediaType'] and isinstance(encoded,bytes) and 0<len(encoded)<=4*1024*1024,'IMAGE_FRAME_INVALID')
+                require(hashlib.sha256(encoded).hexdigest()==state['encodedSHA256'],'IMAGE_CONTENT_CHANGED')
+                require(self.clock()-entry['issued']<self.ttl and self.surface.current(entry['proof']) is True,'IMAGE_SNAPSHOT_STALE')
+                entry['state']='captured'
+                return dict(data,encoded=base64.b64encode(encoded).decode('ascii'))
             raw=frame.get('rgba');bounds=frame.get('bounds')
             require(bounds==data['imageBounds'] and isinstance(raw,bytes) and len(raw)==bounds['width']*bounds['height']*4 and len(raw)<=MAX_RGBA,'IMAGE_FRAME_INVALID')
             require(self.clock()-entry['issued']<self.ttl and self.surface.current(entry['proof']) is True,'IMAGE_SNAPSHOT_STALE')

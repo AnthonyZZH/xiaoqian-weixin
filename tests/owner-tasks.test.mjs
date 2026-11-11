@@ -238,9 +238,9 @@ test('phone panel is read-only and reachable only with the token',async t=>{
  assert.equal(panelUrl,'http://panel.invalid:8790/'+token+'/');assert.ok(token.length>=32);
  const base='http://127.0.0.1:'+panel.server.address().port+'/';
  const task=await f.start({title:'SYNTHETIC PANEL',goal:'GOAL-PANEL'});await f.complete('GOAL-PANEL','PANEL ARTIFACT');await f.ended(task.id,'succeeded');
- const page=await fetch(base+token+'/');assert.equal(page.status,200);assert.match(await page.text(),/任务面板/);
+ const page=await fetch(base+token+'/');assert.equal(page.status,200);assert.match(await page.text(),/控制面板/);
  const state=await (await fetch(base+token+'/api/state')).json();
- assert.equal(state.tasks[0].title,'SYNTHETIC PANEL');assert.equal(state.tasks[0].status,'succeeded');assert.equal('request' in state.tasks[0],false);
+ assert.equal(state.control,false);assert.equal(state.tasks[0].title,'SYNTHETIC PANEL');assert.equal(state.tasks[0].status,'succeeded');assert.equal('request' in state.tasks[0],false);
  assert.equal(await (await fetch(base+token+'/api/artifact/'+task.id+'/s1')).text(),'PANEL ARTIFACT');
  for(const url of [base,base+'api/state',base+'x'.repeat(token.length)+'/api/state',base+token+'/api/artifact/'+task.id+'/nope',base+token+'/api/artifact/999/s1'])assert.equal((await fetch(url)).status,404,url.replace(token,'<token>'));
  assert.equal((await fetch(base+token+'/api/state',{method:'POST'})).status,404);

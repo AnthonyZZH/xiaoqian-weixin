@@ -346,6 +346,7 @@ class DriverClient:
 
     def native_image_command(self,chat,command,args,*,timeout=None):
         if command not in ("image_inspect","image_capture","image_current","saved_file_acquire"):raise DriverError("IMAGE_COMMAND_DENIED")
+        if timeout is None and command=='image_inspect':timeout=12.0
         return self._submit(command,dict(args,chat=chat.to_dict()),timeout)
 
     def extract_image(self, chat: Chat, source_key: str, *, timeout: float | None = None) -> str:

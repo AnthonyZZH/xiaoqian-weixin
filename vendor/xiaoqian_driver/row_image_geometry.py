@@ -46,7 +46,7 @@ def search_bounds(row, viewport, dpi, *, incoming_content_only=False):
     return {'x': row['x']+guard, 'y': row['y'], 'width': right-guard, 'height': row['height']}
 
 
-def tight_photo(frame_bounds, rgba, dpi):
+def tight_photo(frame_bounds, rgba, dpi, *, verified_owner_photo=False):
     """Inspect only the already avatar-excluded row. Return cropped RGBA.
 
     Reject uncertain backgrounds, loading rectangles, disconnected labels or
@@ -74,9 +74,12 @@ def tight_photo(frame_bounds, rgba, dpi):
     require(left >= gap and top >= gap and w-right >= gap and h-bottom >= gap, 'IMAGE_CONTENT_TOUCHES_GUARD')
     cw, ch = right-left, bottom-top
     require(16 <= cw <= 512 and 16 <= ch <= 512, 'IMAGE_CONTENT_SIZE_UNSUPPORTED')
-    require(sum(mask) >= cw*ch*.72, 'IMAGE_CONTENT_SPARSE_OR_MIXED')
-    require(all(sum(mask[y*w+left:y*w+right]) >= cw*.3 for y in range(top, bottom)), 'IMAGE_DISCONNECTED_CONTENT')
-    require(all(sum(mask[y*w+x] for y in range(top, bottom)) >= ch*.3 for x in range(left, right)), 'IMAGE_DISCONNECTED_CONTENT')
+    # A verified photo can contain pixels matching the chat background. The
+    # native row, occlusion checks and crop guard still bound the screenshot.
+    if not verified_owner_photo:
+        require(sum(mask) >= cw*ch*.72, 'IMAGE_CONTENT_SPARSE_OR_MIXED')
+        require(all(sum(mask[y*w+left:y*w+right]) >= cw*.3 for y in range(top, bottom)), 'IMAGE_DISCONNECTED_CONTENT')
+        require(all(sum(mask[y*w+x] for y in range(top, bottom)) >= ch*.3 for x in range(left, right)), 'IMAGE_DISCONNECTED_CONTENT')
     crop = b''.join(rgba[(y*w+left)*4:(y*w+right)*4] for y in range(top, bottom))
     colors = {crop[i:i+3] for i in range(0, len(crop), 4)}
     require(len(colors) >= 16, 'IMAGE_EMPTY_OR_LOADING')

@@ -59,7 +59,7 @@ class WakePricingTests(unittest.TestCase):
                 self.assertEqual(policy.price_band(stamp(iso)), band)
 
     def test_real_scheduler_rebases_at_tariff_boundary(self):
-        with tempfile.TemporaryDirectory(dir=APP / 'test') as root:
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as root:
             now = [stamp('2026-11-09T08:59:59+08:00')]
             scheduler = policy.Scheduler(Path(root) / 'synthetic.sqlite3', policy.ScheduleConfig.from_legacy(settings()), clock=lambda: now[0], rng=Endpoint())
             self.assertEqual(scheduler.snapshot()['owner_wake_state'][0]['next_due'], now[0] + 900)
@@ -79,7 +79,7 @@ class WakePricingTests(unittest.TestCase):
     def test_master_disable_and_mute_still_win(self):
         for options in [settings(initiative_enabled=False), settings()]:
             if 'initiative_enabled' not in options: options['chats']['synthetic-owner']['muted'] = True
-            with tempfile.TemporaryDirectory(dir=APP / 'test') as root:
+            with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as root:
                 now = [stamp('2026-11-09T12:00:00+08:00')]
                 scheduler = policy.Scheduler(Path(root) / 'synthetic.sqlite3', policy.ScheduleConfig.from_legacy(options), clock=lambda: now[0], rng=Endpoint())
                 now[0] += 1800
@@ -95,7 +95,7 @@ class WakePricingTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('synthetic_stage_rpc', APP / 'tools/stage-rpc.py')
         staging = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(staging)
-        with tempfile.TemporaryDirectory(dir=APP / 'test') as root:
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as root:
             root = Path(root)
             vendor = root / 'app/vendor'
             shutil.copytree(APP / 'vendor', vendor, ignore=shutil.ignore_patterns('__pycache__'))

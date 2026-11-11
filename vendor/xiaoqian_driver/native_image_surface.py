@@ -269,7 +269,8 @@ class NativeRowImageSurface(NativeUIASurface):
         context = observation.context
         try: pixels = self.api.capture_rgba(context['searchBounds'])
         except Exception: raise SurfaceError('IMAGE_MEASUREMENT_CAPTURE_UNKNOWN') from None
-        content = tight_photo(context['searchBounds'], pixels, context['dpi'])
+        content = tight_photo(context['searchBounds'], pixels, context['dpi'],
+                              verified_owner_photo=context['mediaKind']=='photo_static_frame')
         require(self.current(observation), 'IMAGE_MEASUREMENT_STALE')
         state = {k: context[k] for k in ('window', 'rowBounds', 'rowRuntimeId', 'rowNameHash', 'draftHash', 'dpi', 'mediaKind', 'sourceKind', 'animationFramesAnalyzed')}
         state.update(imageBounds=content['bounds'], viewportBounds=dict(content['bounds']), pixelSHA256=content['sha256'],

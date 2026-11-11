@@ -66,23 +66,33 @@ export function createNativeImageInput({attachments,provider,getScope}={}){
         const receipt=await provider.capture(evidence);
         check(receipt?.evidence===evidence&&receipt.generation===read.generation&&receipt.readId===read.readId&&same(receipt.frame?.bounds,viewport),'IMAGE_CAPTURE_PROVENANCE_MISMATCH');
         check(await provider.isCurrent(evidence)===true,'IMAGE_SNAPSHOT_STALE');current(chatId,scope);
-        const png=cropScreenshot(receipt.frame,bounds);
+        let bytes,mediaType='image/png';
+        if(evidence.pixelEncoding==='encoded-image/v1'){
+          check(evidence.sourceKind==='wechat_viewer_original'&&Buffer.isBuffer(receipt.image?.data)&&receipt.image.data.length<=MAX_BYTES&&['image/png','image/jpeg'].includes(receipt.image.mediaType),'IMAGE_ENCODED_RECEIPT_INVALID');
+          check(bounds.width<=4096&&bounds.height<=4096&&bounds.width*bounds.height<=8_000_000,'IMAGE_PIXEL_LIMIT');
+          bytes=receipt.image.data;mediaType=receipt.image.mediaType;
+        }else bytes=cropScreenshot(receipt.frame,bounds);
         // Actual installed Harness API: encoded uploads -> durable ImageBlock refs.
-        const blocks=await attachments.admitPromptContent([{type:'image',data:png.toString('base64'),mediaType:'image/png',name:'wechat-message-capture.png'}]);
+        const blocks=await attachments.admitPromptContent([{type:'image',data:bytes.toString('base64'),mediaType,name:mediaType==='image/png'?'wechat-message-image.png':'wechat-message-image.jpg'}]);
         current(chatId,scope);check(await provider.isCurrent(evidence)===true,'IMAGE_SNAPSHOT_STALE');
         check(Array.isArray(blocks)&&blocks.length===1&&blocks[0]?.type==='image'&&blocks[0].attachment&&typeof blocks[0].attachment==='object','IMAGE_ADMISSION_INVALID');
         const ticket=Object.freeze({});
-        tickets.set(ticket,{chatId,messageId:message.id,scope,evidence,blocks:structuredClone(blocks),sha256:sha(png)});
+        tickets.set(ticket,{chatId,messageId:message.id,scope,blocks:structuredClone(blocks),sha256:sha(bytes),metadata:{sourceKind:evidence.sourceKind==='wechat_viewer_original'?'wechat_viewer_original':'static_screenshot',width:bounds.width,height:bounds.height,...(evidence.originalSize?{originalSize:structuredClone(evidence.originalSize)}:{})}});
         return ticket;
       });}catch(error){
         if(error!==null&&typeof error==='object'&&(captureAttempted||['IMAGE_MEASUREMENT_CAPTURE_UNKNOWN','IMAGE_MEASUREMENT_STALE'].includes(error.code||error.message)))uncertainFailures.add(error);
         throw error;
       }
     },
+    metadata(ticket,{chatId,messageId}){
+      const row=tickets.get(ticket);check(row&&row.chatId===chatId&&row.messageId===messageId,'IMAGE_TICKET_SCOPE_MISMATCH');current(chatId,row.scope);return structuredClone(row.metadata);
+    },
     async content(ticket,{chatId,messageId}){
       const row=tickets.get(ticket);
       check(row&&row.chatId===chatId&&row.messageId===messageId,'IMAGE_TICKET_SCOPE_MISMATCH');
-      current(chatId,row.scope);check(await provider.isCurrent(row.evidence)===true,'IMAGE_SNAPSHOT_STALE');
+      // Capture and admission already validated this immutable crop. A later
+      // read can move the viewport; the binding and session still must match.
+      current(chatId,row.scope);
       return structuredClone(row.blocks);
     }
   });
