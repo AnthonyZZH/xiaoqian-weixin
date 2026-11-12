@@ -215,3 +215,33 @@ for(const script of ['attachment_readers.py','attachment_native.py','viewer_nati
  const result=spawnSync(python,['-B',fileURLToPath(new URL('./'+script,import.meta.url))],{encoding:'utf8',windowsHide:true});
  assert.equal(result.status,0,result.stdout+'\n'+result.stderr);
 });
+test('a proactive check is skipped once: asking again that turn is a no-op, and a refused reply says why',async t=>{
+ let sends=0;
+ const f=await fixture(t,{sendText:async()=>{sends++;return {status:'ok'};}});
+ const core=f.bridge.core,agent={};
+ const grantId=core.permits.issue('owner',{sourceId:'wake-1',nativeMessageId:'message-wake',kind:'proactive',wakeId:'wake-1'});
+ core.permits.active.set('owner',{agent,turn:6,grantId});
+ const context={nativeTurn:true,grantId,turn:6};
+ const first=await core.invoke('owner','wechat_skip',{},context);
+ assert.equal(first.status,'skipped');assert.equal(first.already,undefined);assert.match(first.next,/不要再调用/);
+ assert.equal(core.permits.table('owner')[grantId].status,'skipped');
+ const again=await core.invoke('owner','wechat_skip',{},context);
+ assert.equal(again.status,'skipped');assert.equal(again.already,true);
+ await assert.rejects(core.invoke('owner','wechat_reply',{text:'还是说一句',deliveryId:'after-skip'},context),/TURN_ALREADY_SKIPPED/);
+ assert.equal(sends,0);
+ // A later turn has no permit of its own: that is a different answer from "already decided".
+ core.permits.active.set('owner',{agent,turn:7,grantId:null});
+ await assert.rejects(core.invoke('owner','wechat_skip',{},{nativeTurn:true,grantId:null,turn:7}),/NO_REPLY_PERMIT/);
+});
+test('a proactive turn may speak once: the second reply is refused as a used budget, not as a missing permit',async t=>{
+ let sends=0;
+ const f=await fixture(t,{sendText:async()=>{sends++;return {status:'ok'};}});
+ const core=f.bridge.core,agent={};
+ const grantId=core.permits.issue('owner',{sourceId:'wake-2',nativeMessageId:'message-wake-2',kind:'proactive',wakeId:'wake-2'});
+ core.permits.active.set('owner',{agent,turn:3,grantId});
+ const context={nativeTurn:true,grantId,turn:3};
+ assert.equal((await core.invoke('owner','wechat_reply',{text:'第一条',deliveryId:'one'},context)).status,'ok');
+ await assert.rejects(core.invoke('owner','wechat_reply',{text:'第二条',deliveryId:'two'},context),/REPLY_BUDGET_USED/);
+ await assert.rejects(core.invoke('owner','wechat_skip',{},context),/REPLY_BUDGET_USED/);
+ assert.equal(sends,1);
+});

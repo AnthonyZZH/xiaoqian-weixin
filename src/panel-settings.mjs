@@ -33,7 +33,7 @@ export function normalizeSettings(input={}){
 
 /** Returns a new patch array with the model and drawing choices applied. The input is not modified. */
 export function applySettings(patch,settings){
- const s=normalizeSettings(settings),out=structuredClone(patch).filter(e=>e.id!=='llm-pi-ai'&&e.id!=='agent-default-model');
+ const s=normalizeSettings(settings),out=structuredClone(patch).filter(e=>!['llm-pi-ai','agent-default-model',REPEAT_REMINDER.id].includes(e.id));
  const bridge=out.flatMap(e=>e.insert||[]).find(e=>e.id==='xiaoqian-wechat-native');
  if(!bridge?.config)bad('配置文件里找不到小千的桥接项');
  const custom=s.chat.mode==='custom',provider=custom?CUSTOM_PROVIDER:'deepseek-official',config=bridge.config;
@@ -47,5 +47,9 @@ export function applySettings(patch,settings){
  if(config.billingCollector)config.billingCollector={...config.billingCollector,enabled:!custom};
  if(s.draw.mode==='off')delete config.draw;
  else config.draw={enabled:true,kind:s.draw.mode,baseURL:s.draw.baseURL,model:s.draw.model,size:s.draw.size,apiKeyEnv:'XQ_DRAW_API_KEY'};
+ out.unshift(structuredClone(REPEAT_REMINDER));
  return out;
 }
+// Every quiet proactive check ends in the same wechat_skip call. The Harness reads identical calls as a stuck loop and
+// injects a reminder mid-turn, which made the assistant call skip and reply again after its skip had already landed.
+export const REPEAT_REMINDER={id:'repeat-tool-reminder',name:'@deepseek-ai/dsh-repeat-tool-reminder',config:{thresholds:[3,5,8],argumentsPreviewChars:500,exclude:['wechat_skip']}};

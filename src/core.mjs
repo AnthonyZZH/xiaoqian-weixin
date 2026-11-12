@@ -4,6 +4,7 @@ import {State,digest} from './state.mjs';
 import {validateChats,normalizeMessage,authorize,requireValue,textArg,allowedTools} from './policy.mjs';
 
 export const rotationCoreRevision='rotation-core-v1-20261029';
+const SKIP_DONE='已记录跳过并重新排期。这一轮到此结束，不要再调用任何工具。';
 const imageTypeRefusals=new Set(['IMAGE_AUTO_EXTERNAL_NOT_AUTHORIZED','IMAGE_MIXED_ROW_UNSUPPORTED','IMAGE_ROW_BOUNDARY_UNVERIFIED','IMAGE_PURE_NATIVE_LABEL_REQUIRED','IMAGE_DPI_UNSUPPORTED','IMAGE_CONTENT_SIZE_UNSUPPORTED','OWNER_IMAGE_REQUIRED']);
 const retryableImageReads=new Set(['IMAGE_CONTROL_OCCLUDED','IMAGE_SNAPSHOT_STALE','IMAGE_EMPTY_OR_LOADING',
   'IMAGE_CONTENT_CHANGED','IMAGE_CAPTURE_UNKNOWN','IMAGE_MEASUREMENT_CAPTURE_UNKNOWN','IMAGE_CAPABILITY_EXPIRED']);
@@ -394,7 +395,10 @@ export class WeChatCore {
     const chat=this.chat(chatId);authorize(chat,name);requireValue(!this.store.data.paused||name==='wechat_status'||name==='wechat_control','BRIDGE_PAUSED');
     switch(name){
       case 'wechat_reply':return this.reply(chatId,args,context);
-      case 'wechat_skip':{const s=this.state(chatId);const granted=await this.serial(()=>this.permits.consume(chatId,context));if(chat.mode==='group'&&granted.grantKind==='incoming'){this.permits.close(chatId,granted.grantId,'skipped');return {status:'skipped'};}requireValue(granted.grantKind==='proactive','NO_WAKE_TO_SKIP');this.permits.close(chatId,granted.grantId,'skipped');await this.initiative?.declined(chatId);s.pendingWake=null;s.replyPermit=null;this.store.save();return {status:'skipped'};}
+      case 'wechat_skip':{const s=this.state(chatId);
+        // The skip is recorded once; asking again in the same turn gets the same answer instead of an error.
+        if(this.permits.skippedThisTurn(chatId,context))return {status:'skipped',already:true,next:SKIP_DONE};
+        const granted=await this.serial(()=>this.permits.consume(chatId,context));if(chat.mode==='group'&&granted.grantKind==='incoming'){this.permits.close(chatId,granted.grantId,'skipped');return {status:'skipped',next:SKIP_DONE};}requireValue(granted.grantKind==='proactive','NO_WAKE_TO_SKIP');this.permits.close(chatId,granted.grantId,'skipped');await this.initiative?.declined(chatId);s.pendingWake=null;s.replyPermit=null;this.store.save();return {status:'skipped',next:SKIP_DONE};}
       case 'wechat_status':return this.status(chatId);
       case 'wechat_control': if(args.action==='pause'){this.pause();return {paused:true};}if(args.action==='resume'){this.resume();return {paused:false};}throw new Error('CONTROL_INVALID');
       case 'wechat_memory_read':return this.features?.readMemory(chatId)||{facts:[],style:''};

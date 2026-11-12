@@ -49,8 +49,16 @@ export class ReplyPermits {
     const key=context.nativeTurn?context.grantId:Object.keys(table).find(k=>table[k].status==='open'&&table[k].remaining>0);
     const grant=key&&table[key];
     if(context.nativeTurn){const active=this.active.get(id);requireValue(active?.grantId===key&&active?.turn===context.turn,'NO_REPLY_PERMIT');}
+    // A turn that already decided is not the same as a turn that was never allowed to speak: say which.
+    requireValue(grant?.status!=='skipped','TURN_ALREADY_SKIPPED');
+    requireValue(!(grant?.status==='open'&&grant.remaining<=0),'REPLY_BUDGET_USED');
     requireValue(grant?.status==='open'&&grant.remaining>0,'NO_REPLY_PERMIT');
     grant.remaining--;this.core.store.save();return {...context,grantId:key,grantKind:grant.kind,wakeId:grant.wakeId};
+  }
+  /** True when this very turn already recorded its skip, so a second wechat_skip is a no-op, not an error. */
+  skippedThisTurn(id,context={}){
+    const active=this.active.get(id),grant=context.nativeTurn&&context.grantId&&this.table(id)[context.grantId];
+    return Boolean(grant&&grant.status==='skipped'&&active?.grantId===context.grantId&&active?.turn===context.turn);
   }
   close(id,key,reason){
     const grant=key&&this.table(id)[key];

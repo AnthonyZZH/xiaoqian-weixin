@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {atomicJson,readJson} from './features.mjs';
 import {generateImage} from './draw-api.mjs';
+import {invokeWorker as invokeSearchWorker,searchRequest,sharedPacer} from '../vendor/owner-tools/index.mjs';
 
 function invokeWorker(request,{python='python',workerPath,timeoutMs=20000,signal}={}){
   return new Promise((resolve,reject)=>{
@@ -34,7 +35,7 @@ function invokeWorker(request,{python='python',workerPath,timeoutMs=20000,signal
 }
 
 /** Small optional tools run outside the serial UI process and never call DeepSeek API. */
-export function createCapabilities({config={},media,generatedRoot,python='python',workerPath}={}){
+export function createCapabilities({config={},media,generatedRoot,python='python',workerPath,searchWorker=invokeSearchWorker,pacer=sharedPacer}={}){
   const result={};
   const drawQuota=chatId=>{
     const chat=config.chats?.find(c=>c.id===chatId);
@@ -53,12 +54,16 @@ export function createCapabilities({config={},media,generatedRoot,python='python
     state.used[key]={day,count:used+1};atomicJson(file,state);
   };
   if(config.searchEnabled===true)result.search=async({args,signal})=>{
+    // Same engines, merging and filtering as the owner's search; other chats get one query and five results.
     const query=args.query;
     if(typeof query!=='string'||!query.trim()||query.length>200)throw new Error('SEARCH_QUERY_INVALID');
-    const answer=await invokeWorker({operation:'search',query},{python,workerPath,timeoutMs:20000,signal});
-    if(!Array.isArray(answer.results)||answer.results.length>5)throw new Error('SEARCH_RESULT_INVALID');
-    return answer.results.map(row=>({title:String(row.title||'').slice(0,500),
-      url:String(row.url||'').slice(0,2000),snippet:String(row.snippet||'').slice(0,2000)}));
+    const skip=pacer.skip();
+    const answer=await searchWorker({...searchRequest({query,count:5,freshness:args.freshness}),skip},{python,timeoutMs:15000,signal});
+    pacer.note(skip,answer?.engines);
+    if(!Array.isArray(answer?.results))throw new Error('SEARCH_RESULT_INVALID');
+    return {as_of:answer.as_of,notes:Array.isArray(answer.notes)?answer.notes.map(String).slice(0,6):[],
+      results:answer.results.slice(0,5).map(row=>({title:String(row.title||'').slice(0,200),url:String(row.url||'').slice(0,2000),
+        date:row.date||null,snippet:String(row.snippet||'').slice(0,300)})),trust:'untrusted_web_content'};
   };
   if(config.forge?.enabled===true)result.draw=async({chatId,args,signal})=>{
     if(!media?.importOriginal)throw new Error('MEDIA_UNAVAILABLE');
