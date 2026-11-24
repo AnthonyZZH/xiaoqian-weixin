@@ -9,8 +9,13 @@ if(options['adapter-root']){if(!path.isAbsolute(options['adapter-root']))throw E
 if(options['driver-rpc']){if(!path.isAbsolute(options['driver-rpc']))throw Error('ABSOLUTE_DRIVER_RPC_REQUIRED');config.driverRpcPath=options['driver-rpc'];}
 if(options['owner-shell']==='true'){if(!path.isAbsolute(options['shell-approval-file']||'')||!path.isAbsolute(options['base-python']||''))throw Error('PRIVATE_SHELL_APPROVAL_AND_PYTHON_REQUIRED');config.ownerShell={enabled:true,approvalFile:options['shell-approval-file'],python:options['base-python']};}
 if(options.balance==='true')config.balance={enabled:true};
+if (options['owner-tasks'] === 'true') config.ownerTasks = {enabled:true};
 if(options['long-tasks']==='true'){if(!path.isAbsolute(options['task-root']||''))throw Error('ABSOLUTE_TASK_ROOT_REQUIRED');config.longTasks={enabled:true,root:options['task-root']};}
 if(options['owner-files']==='true'){if(!path.isAbsolute(options['work-root']||'')||!path.isAbsolute(options['base-python']||''))throw Error('DEDICATED_WORK_ROOT_AND_PYTHON_REQUIRED');config.ownerFiles={enabled:true,python:options['base-python'],projects:{'owner-work':options['work-root']}};}
 if(options['remote-media']==='true'){if(!path.isAbsolute(options['base-python']||'')||!path.isAbsolute(options['site-packages']||''))throw Error('BASE_PYTHON_AND_SITE_PACKAGES_REQUIRED');config.remoteMediaImport={enabled:true,python:options['base-python'],sitePackages:options['site-packages']};}
 const patch=[{insert:[{id:'xiaoqian-wechat-native',name:pathToFileURL(path.resolve(import.meta.dirname,'../src/index.mjs')).href,config}]}];
+if (options['mobile-status'] === 'true') {
+  const plugin = new URL('./mobile-status/mobile-host-control.mjs', import.meta.url);
+  patch[0].insert.push({id:'xiaoqian-mobile-control', name:plugin.href});
+}
 fs.writeFileSync(options.output,JSON.stringify(patch,null,2),{flag:'wx'});console.log(JSON.stringify({output:options.output,startPaused:true,ownerOnly:config.chats.length===1,configuredChats:config.chats.length,automaticRotation:false,credentialsWritten:false}));

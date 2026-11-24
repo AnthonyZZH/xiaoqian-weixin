@@ -140,6 +140,8 @@ node "$Repo\tools\render-owner-deployment.mjs" `
 | `--owner-management true` | 插件 / MCP 管理 | — |
 | `--balance true` | 查余额 | 官方 DeepSeek |
 | `--long-tasks true` | 长任务 | `--task-root <绝对路径>` |
+| `--mobile-status true` | 接入手机状态网站 | [安装和打开状态页](tools/mobile-status/README.md) |
+| `--owner-tasks true` | 启用可在状态页查看和中断的后台任务 | 步骤和产物保存在私有状态目录 |
 | `--owner-files true` | 项目文件读写 | `--work-root <独立目录>` + `--base-python <路径>` |
 | `--remote-media true` | 网图入库 | `--base-python <路径>` + `--site-packages <路径>` |
 
@@ -157,7 +159,9 @@ node "$HostRoot\node_modules\@deepseek-ai\dsh\lib\bin.js" `
 
 ## 手机控制面板
 
-在桥接配置里打开后，小千会在本机起一个小网页（默认 `127.0.0.1:8790`）：
+**[小千状态网站](tools/mobile-status/README.md)** 显示微信收发状态和后台任务的步骤时间线。手机上可以看当前步骤、并行进度和用时。使用管理链接还可以中断指定任务。
+
+小千还自带一个用于任务产物和模型设置的控制面板（默认 `127.0.0.1:8790`）。在桥接配置里启用：
 
 ```json
 "ownerTasks": {

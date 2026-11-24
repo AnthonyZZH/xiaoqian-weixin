@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>小千状态</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <div class="page-head">
+      <h1>小千状态</h1>
+      <button id="refresh" type="button" hidden>立即刷新</button>
+    </div>
+    <section class="summary" aria-label="运行状态">
+      <strong id="state" role="status">正在连接…</strong>
+      <p id="detail"></p>
+      <button id="restart" type="button" hidden>重启小千</button>
+    </section>
+    <p id="action-note" role="status" hidden></p>
+    <form id="access" hidden>
+      <label for="code">查看码</label>
+      <input id="code" type="password" autocomplete="off" required>
+      <button type="submit">查看状态</button>
+    </form>
+    <section id="task-section" aria-labelledby="task-heading" hidden>
+      <div class="section-head"><h2 id="task-heading">后台任务</h2></div>
+      <div id="tasks"></div>
+      <details id="task-history" hidden>
+        <summary><span id="task-history-label">最近结束的任务</span><span id="task-history-latest" hidden></span></summary>
+        <div id="finished-tasks"></div>
+      </details>
+    </section>
+    <div class="section-head" id="chat-heading" hidden><h2>微信会话</h2></div>
+    <div id="chats"></div>
+    <footer id="updated"></footer>
+  </main>
+</body>
+</html>
