@@ -6,6 +6,16 @@
 
 </div>
 
+**小千主仓库。** 微信功能、问题反馈和 Windows 桌面部署说明统一在这里维护。[快速开始](#快速开始) · [部署 Skill](skills/xiaoqian-deploy/SKILL.md) · [反馈问题](https://github.com/AnthonyZZH/xiaoqian-weixin/issues)
+
+| 项目入口 | 维护状态与用途 |
+|---|---|
+| [xiaoqian-weixin](https://github.com/AnthonyZZH/xiaoqian-weixin) | **主库**。当前微信桥接、驱动、手机面板和部署 Skill |
+| [xiaoqian-deploy-skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill) | 部署 Skill 的独立安装入口。开发与修订已并入本主库 |
+| [她的图书馆](https://github.com/AnthonyZZH/ai-memory-public) | 独立维护的共享记忆库，通过 MCP 接入小千 |
+| [旧微信桌面版](https://github.com/AnthonyZZH/xiaoqian-wechat/tree/main) · [旧微信服务器版](https://github.com/AnthonyZZH/xiaoqian-wechat/tree/server) | **已停用**。保留原版本和历史文档，新的微信部署从本主库开始 |
+| [旧服务器部署 Skill](https://github.com/AnthonyZZH/xiaoqian-server-deploy) | **已停用**。原 Windows 云服务器和 QQ/NapCat 安装资料保留供查阅 |
+
 小千在微信里和你聊天，也替你办事：联网搜索、读网页和文件、看图、在后台跑多步任务、记住长期的事、主动找你说话。模型、会话和工具由 DeepSeek Harness（`dsh`）管理，微信只是消息的进出口。
 
 > 这是**只含源码的公开快照**：不含聊天记录、人格、记忆库、密钥或日志。
@@ -93,7 +103,9 @@ docs/      各功能的详细说明
 
 ## 快速开始
 
-想让 AI 一步步带你部署，用 [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill)。手动部署如下，路径都是示例。**聊天、人格、记忆、日志等运行数据一律放在仓库目录之外。**
+使用 Codex 部署时，把主库的整个 [skills/xiaoqian-deploy](skills/xiaoqian-deploy) 目录复制到 Codex 的 `skills` 目录，在新对话中调用 `$xiaoqian-deploy`。只下载部署工具时，可使用[独立安装入口](https://github.com/AnthonyZZH/xiaoqian-deploy-skill)。
+
+以下是手动部署步骤，路径都是示例。**聊天、人格、记忆、日志等运行数据一律放在仓库目录之外。**
 
 ### 1. 安装依赖
 
@@ -268,11 +280,7 @@ npm test
 
 ## 相关仓库、来源与许可
 
-| 仓库 | 是什么 |
-|---|---|
-| **小千微信 · Harness Native**（本仓库） | 小千本体 |
-| [小千部署 Skill](https://github.com/AnthonyZZH/xiaoqian-deploy-skill) | 安装、升级、迁移、健康检查、回退的完整流程 |
-| [她的图书馆](https://github.com/AnthonyZZH/ai-memory-public) | 多个 AI 共用的长期记忆库（basic-memory + MCP） |
+旧微信桌面版和服务器版中的微信收发、群聊、记忆与表情等功能由本主库维护。旧版发送者识别代码保存在 [legacy/senders.py](legacy/senders.py)，当前运行入口见[快速开始](#快速开始)。原服务器版的 QQ/NapCat 部署资料仍可在页首的旧仓入口查阅。
 
 来源说明见 [NOTICE.md](NOTICE.md)、[docs/PROVENANCE.md](docs/PROVENANCE.md) 和 `vendor/` 下各模块自带的声明。基础提交记录在 [`SOURCE.json`](SOURCE.json)。
 
