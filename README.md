@@ -282,6 +282,8 @@ npm test
 
 旧微信桌面版和服务器版中的微信收发、群聊、记忆与表情等功能由本主库维护。旧版发送者识别代码保存在 [legacy/senders.py](legacy/senders.py)，当前运行入口见[快速开始](#快速开始)。原服务器版的 QQ/NapCat 部署资料仍可在页首的旧仓入口查阅。
 
+微信和图书馆独立适配包共用的 MCP 通信、访问范围检查和错误处理维护在 [vendor/library-adapter/core.mjs](vendor/library-adapter/core.mjs)。微信专用的搜索过滤保留在[微信适配入口](vendor/library-adapter/index.mjs)。
+
 来源说明见 [NOTICE.md](NOTICE.md)、[docs/PROVENANCE.md](docs/PROVENANCE.md) 和 `vendor/` 下各模块自带的声明。基础提交记录在 [`SOURCE.json`](SOURCE.json)。
 
 本仓库**没有统一的根许可证**。公开可见不等于可以随意复用，各部分按各自的许可和授权处理。

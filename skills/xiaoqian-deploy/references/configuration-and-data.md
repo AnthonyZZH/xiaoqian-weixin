@@ -21,13 +21,20 @@
 在公开主仓的 checkout 中，沿用 [依赖与来源](dependencies-and-sources.md) 的目录变量和确认过的主人备注名：
 
 ```powershell
+$DriverPython = Join-Path $Private 'venv\Scripts\python.exe'
+$NativePackages = Join-Path $HostRoot 'node_modules\@deepseek-ai'
+$Adapter = Join-Path $Repo 'compat\adapter'
+$Rpc = Join-Path $Repo 'compat\driver\bridge_rpc.py'
+foreach ($file in @($DriverPython, "$NativePackages\dsh\lib\bin.js", "$NativePackages\dsh-tools\lib\index.js", "$Adapter\wechat_adapter.py", $Rpc)) {
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "缺少部署文件：$file" }
+}
 $OwnerTitle = Read-Host '已确认的主人私聊备注名'
 node "$Repo\tools\render-owner-deployment.mjs" `
   --state-root "$Private\state" `
-  --python "$Private\venv\Scripts\python.exe" `
-  --native-package-root "$HostRoot\node_modules\@deepseek-ai" `
-  --adapter-root "$Repo\compat\adapter" `
-  --driver-rpc "$Repo\compat\driver\bridge_rpc.py" `
+  --python "$DriverPython" `
+  --native-package-root "$NativePackages" `
+  --adapter-root "$Adapter" `
+  --driver-rpc "$Rpc" `
   --owner-title "$OwnerTitle" `
   --output "$Private\wechat.patch.json"
 ```
