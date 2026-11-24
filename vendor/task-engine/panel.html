@@ -106,7 +106,7 @@ const base = location.pathname.replace(/\/?$/, '/');
 const ST = {pending: '等待', running: '执行中', succeeded: '完成', failed: '失败', blocked: '未执行', cancelled: '已取消', queued: '排队中'};
 const hm = iso => iso ? new Date(iso).toLocaleString('zh-CN', {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : '—';
 function dur(a, b) { if (!a) return ''; const s = Math.max(0, Math.round((new Date(b || Date.now()) - new Date(a)) / 1000)); return s < 60 ? s + ' 秒' : s < 3600 ? Math.floor(s / 60) + ' 分 ' + s % 60 + ' 秒' : s < 86400 ? Math.floor(s / 3600) + ' 小时 ' + Math.floor(s % 3600 / 60) + ' 分' : Math.floor(s / 86400) + ' 天 ' + Math.floor(s % 86400 / 3600) + ' 小时'; }
-let state = null, formsLoaded = false, restarting = 0;
+let state = null, formsLoaded = false, restarting = null, postingSettingsOrRestart = false;
 const say = (id, text, ok) => { const e = $(id); e.textContent = text; e.className = 'msg ' + (ok === true ? 'ok' : ok === false ? 'bad' : ''); };
 async function act(name, body) {
   const r = await fetch(base + 'api/action/' + name, {method: 'POST', headers: {'content-type': 'application/json', 'x-xq-panel': '1'}, body: JSON.stringify(body || {})});
@@ -124,6 +124,10 @@ function renderOverview() {
     .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   $('pauseBtn').textContent = s.paused ? '恢复收发' : '暂停收发';
   $('restartBtn').style.display = s.can.restart ? '' : 'none';
+  for (const id of ['restartBtn', 'chatSave', 'drawSave']) {
+    $(id).disabled = postingSettingsOrRestart || !!restarting || s.restartPending;
+  }
+  for (const id of ['chatSave', 'drawSave']) $(id).textContent = s.can.restart ? '保存并重启' : '保存设置';
   $('errCard').style.display = s.errors.length ? '' : 'none'; $('errLog').textContent = s.errors.join('\n');
 }
 function renderTasks() {
@@ -178,11 +182,37 @@ async function test(target, msg) {
   try { const r = await act('settings/test', {...collect(), target}); const one = r[target]; say(msg, one ? explain(one) : '没有需要测试的接口', one ? one.ok : undefined); }
   catch (e) { say(msg, e.message, false); }
 }
+function watchRestart(result, msg, prefix = '') {
+  restarting = {instance:result.hostInstance, msg, prefix, until:Date.now() + 90000};
+  const note = result.restartStatus === 'unconfirmed' ? '重启脚本尚未返回，正在等待新实例。' : '重启脚本已执行，正在等待新实例。';
+  say(msg, prefix + note);
+}
+function checkReplacement(observedInstance) {
+  if (!restarting) return;
+  if (observedInstance && observedInstance !== restarting.instance) {
+    say(restarting.msg, restarting.prefix + '已连接到重启后的小千。', true);
+  } else if (Date.now() >= restarting.until) {
+    say(restarting.msg, restarting.prefix + '尚未确认重启完成，请检查主机状态。', false);
+  } else return;
+  restarting = null;
+}
 async function save(msg) {
-  if (!confirm('保存后小千会重启，约一分钟内不回消息。如果新设置导致她起不来，会自动换回原来的设置。继续吗？')) return;
+  const restart = state?.status?.can.restart === true;
+  if (postingSettingsOrRestart || restarting || state?.status?.restartPending) return;
+  if (!confirm(restart ? '保存设置并请求重启小千？正在执行的任务可能中断。' : '保存设置？下次启动小千时生效。')) return;
+  postingSettingsOrRestart = true;
+  renderOverview();
   say(msg, '保存中…');
-  try { await act('settings/save', collect()); for (const id of ['dsKey', 'cuKey', 'drKey']) $(id).value = ''; formsLoaded = false; restarting = Date.now(); say(msg, '已保存，正在重启。页面会在她回来后自动恢复。', true); }
+  try {
+    const result = await act('settings/save', {...collect(), restart});
+    for (const id of ['dsKey', 'cuKey', 'drKey']) $(id).value = '';
+    formsLoaded = false;
+    if (result.restarting) watchRestart(result, msg, '设置已保存。');
+    else if (result.restartStatus === 'failed') say(msg, '设置已保存。' + result.message, false);
+    else say(msg, '设置已保存，下次启动小千时生效。', true);
+  }
   catch (e) { say(msg, e.message, false); }
+  finally { postingSettingsOrRestart = false; renderOverview(); }
 }
 function render() {
   document.querySelectorAll('.ctl').forEach(e => { e.style.display = state.control ? '' : 'none'; });
@@ -192,19 +222,28 @@ function render() {
 }
 async function tick() {
   if (document.hidden) return;
+  const pendingRestart = restarting;
   try {
     const r = await fetch(base + 'api/state', {cache: 'no-store'});
     if (!r.ok) throw new Error(r.status);
-    state = await r.json(); render();
-    if (restarting && state.status && new Date(state.status.startedAt) > restarting - 5000) restarting = 0;
+    state = await r.json();
+    if (pendingRestart === restarting) checkReplacement(state.status?.hostInstance);
+    render();
     $('sync').className = ''; $('sync').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
-  } catch { $('sync').className = 'off'; $('sync').textContent = restarting ? '正在重启，稍等…' : '连接不上，稍后自动重试'; }
+  } catch { checkReplacement(); $('sync').className = 'off'; $('sync').textContent = restarting ? '正在等待新实例…' : '连接不上，稍后自动重试'; }
 }
 $('nav').onclick = e => { const b = e.target.closest('button[data-tab]'); if (!b) return;
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b)); document.querySelectorAll('main>section').forEach(x => x.classList.toggle('on', x.id === b.dataset.tab)); };
 document.querySelectorAll('input[name=chatMode],input[name=drawMode]').forEach(e => { e.onchange = toggleForms; });
 $('pauseBtn').onclick = async () => { try { await act(state.status.paused ? 'bridge/resume' : 'bridge/pause'); say('ovMsg', ''); tick(); } catch (e) { say('ovMsg', e.message, false); } };
-$('restartBtn').onclick = async () => { if (!confirm('重启小千？约一分钟内不回消息，正在执行的任务步骤会中断。')) return; try { await act('host/restart'); restarting = Date.now(); say('ovMsg', '正在重启…', true); } catch (e) { say('ovMsg', e.message, false); } };
+$('restartBtn').onclick = async () => {
+  if (postingSettingsOrRestart || restarting || state?.status?.restartPending || !confirm('请求重启小千？正在执行的任务可能中断。')) return;
+  postingSettingsOrRestart = true;
+  renderOverview();
+  try { watchRestart(await act('host/restart'), 'ovMsg'); }
+  catch (e) { say('ovMsg', e.message, false); }
+  finally { postingSettingsOrRestart = false; renderOverview(); }
+};
 $('chatTest').onclick = () => test('chat', 'chatMsg'); $('drawTest').onclick = () => test('draw', 'drawMsg');
 $('chatSave').onclick = () => save('chatMsg'); $('drawSave').onclick = () => save('drawMsg');
 $('taskList').onclick = async e => {

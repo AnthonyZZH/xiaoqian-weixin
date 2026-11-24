@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import {once} from 'node:events';
+import {EventEmitter,once} from 'node:events';
 import {applySettings,normalizeSettings,DEFAULT_SETTINGS} from '../src/panel-settings.mjs';
 import {generateImage} from '../src/draw-api.mjs';
 import {createCapabilities} from '../src/capabilities.mjs';
@@ -14,6 +14,15 @@ import {Store} from '../vendor/task-engine/store.mjs';
 import {Engine} from '../vendor/task-engine/engine.mjs';
 
 const tmp=()=>fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'xq-panel-'));
+function mockRestartScript(file,calls) {
+ fs.writeFileSync(file,'# synthetic test fixture');
+ return (exe,args)=>{
+  calls.push([exe,...args]);
+  const child=new EventEmitter();
+  queueMicrotask(()=>child.emit('close',0));
+  return child;
+ };
+}
 const PNG=Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),Buffer.alloc(80,7)]);
 const basePatch=()=>[{insert:[{id:'xiaoqian-wechat-native',name:'file:///x/index.mjs',config:{model:{provider:'deepseek-official',model:'deepseek-flash'},balance:{enabled:true},billingCollector:{enabled:true,root:'C:/b'},chats:[]}},{id:'other',name:'x'}]}];
 async function serve(handler){const server=http.createServer(handler);server.listen(0,'127.0.0.1');await once(server,'listening');return {url:'http://127.0.0.1:'+server.address().port,close:()=>new Promise(r=>server.close(r))};}
@@ -77,7 +86,7 @@ test('control panel: token and header gate every action; settings are saved with
  const core={store:{data:{paused:false}},model:{provider:'deepseek-official',model:'deepseek-flash'},capabilities:{},pause(){this.store.data.paused=true;},resume(){this.store.data.paused=false;}};
  const spawned=[],probes=[];
  const control=createPanelControl({getCore:()=>core,engine,stateDir:root,options:{...files,secretsWritable:true},env:{XQ_DEEPSEEK_API_KEY:'sk-machine-level-key-000000'},
-  spawnImpl:(exe,args)=>{spawned.push([exe,...args]);return {unref(){}};},fetchImpl:async(url,init)=>{probes.push([url,init.headers.authorization]);return {ok:!url.includes('bad'),status:url.includes('bad')?401:200};}});
+  spawnImpl:mockRestartScript(files.restartScript,spawned),fetchImpl:async(url,init)=>{probes.push([url,init.headers.authorization]);return {ok:!url.includes('bad'),status:url.includes('bad')?401:200};}});
  const token='t'.repeat(32),panel=createPanel({engine,store,token,control,port:0});await once(panel.server,'listening');
  t.after(async()=>{await panel.close();engine.stop();store.close();fs.rmSync(root,{recursive:true,force:true});});
  const base='http://127.0.0.1:'+panel.server.address().port+'/'+token+'/';
@@ -100,7 +109,10 @@ test('control panel: token and header gate every action; settings are saved with
  assert.deepEqual(tested,{chat:{ok:true,status:200},draw:{ok:true,status:200}});assert.deepEqual(probes,[['http://127.0.0.1:11434/v1/models','Bearer typed-key'],['http://127.0.0.1:7860/sdapi/v1/sd-models',undefined]]);
  assert.equal(fs.existsSync(files.settingsFile),false,'testing saves nothing');
  const invalid=await post('settings/save',{settings:{chat:{mode:'custom',baseURL:'nope',model:'m'}}});assert.equal(invalid.status,400);assert.equal(spawned.length,0);
- const saved=await (await post('settings/save',{settings,secrets:{XQ_CUSTOM_LLM_API_KEY:'typed-key-123'}})).json();
+ const saveResponse=await post('settings/save',{settings,secrets:{XQ_CUSTOM_LLM_API_KEY:'typed-key-123'}});
+ assert.equal(saveResponse.status,202);
+ const saved=await saveResponse.json();
+ assert.equal(saved.result.restartStatus,'script-exited');assert.equal(saved.result.hostInstance,state.status.hostInstance);
  assert.equal(saved.ok,true);assert.equal(saved.result.restarting,true);assert.equal(JSON.stringify(saved).includes('typed-key-123'),false);
  assert.deepEqual(JSON.parse(fs.readFileSync(files.secretsFile)),{XQ_CUSTOM_LLM_API_KEY:'typed-key-123'});
  assert.deepEqual(JSON.parse(fs.readFileSync(files.patchFile+'.prev')),basePatch(),'previous configuration kept for automatic fallback');
@@ -121,7 +133,7 @@ test('by default keys are read-only: they come from the machine, and the panel c
  const files={settingsFile:path.join(root,'settings.json'),patchFile:path.join(root,'patch.json'),restartScript:path.join(root,'restart.ps1')};fs.writeFileSync(files.patchFile,JSON.stringify(basePatch()));
  const core={store:{data:{paused:false}},model:{},capabilities:{}},seen=[],spawned=[];
  const control=createPanelControl({getCore:()=>core,engine,stateDir:root,options:files,env:{XQ_DEEPSEEK_API_KEY:'sk-machine-level-key-000000',XQ_CUSTOM_LLM_API_KEY:'machine-custom-key'},
-  spawnImpl:(...a)=>{spawned.push(a);return {unref(){}};},fetchImpl:async(url,init)=>{seen.push(init.headers.authorization);return {ok:true,status:200};}});
+  spawnImpl:mockRestartScript(files.restartScript,spawned),fetchImpl:async(url,init)=>{seen.push(init.headers.authorization);return {ok:true,status:200};}});
  const settings={chat:{mode:'custom',baseURL:'http://127.0.0.1:11434/v1',model:'local-model',contextWindow:32000},draw:{mode:'off'}};
  assert.deepEqual(control.status().can,{configure:true,restart:true,setKeys:false});
  assert.deepEqual(control.settings().secrets,{XQ_DEEPSEEK_API_KEY:true,XQ_CUSTOM_LLM_API_KEY:true,XQ_DRAW_API_KEY:false});

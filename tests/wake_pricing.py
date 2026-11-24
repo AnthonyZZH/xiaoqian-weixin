@@ -86,12 +86,7 @@ class WakePricingTests(unittest.TestCase):
                 self.assertEqual(scheduler.poll(), [])
 
     def test_rpc_shim_and_staging_use_only_sibling_app(self):
-        shim = APP.parent / 'rpc/vendor/owner_wake_policy.py'
-        spec = importlib.util.spec_from_file_location('synthetic_rpc_policy', shim)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.assertEqual(Path(module.__file__), APP / 'vendor/owner_wake_policy.py')
-        self.assertEqual(module.PRICE_CARD, policy.PRICE_CARD)
+        shim = APP / 'tools/rpc-policy-shim.py'
         spec = importlib.util.spec_from_file_location('synthetic_stage_rpc', APP / 'tools/stage-rpc.py')
         staging = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(staging)
@@ -100,9 +95,16 @@ class WakePricingTests(unittest.TestCase):
             vendor = root / 'app/vendor'
             shutil.copytree(APP / 'vendor', vendor, ignore=shutil.ignore_patterns('__pycache__'))
             result = staging.stage(APP, vendor, root / 'rpc')
+            staged_shim = root / 'rpc/vendor/owner_wake_policy.py'
+            spec = importlib.util.spec_from_file_location('synthetic_rpc_policy', staged_shim)
+            module = importlib.util.module_from_spec(spec)
+            with patch.object(sys, 'path', sys.path.copy()):
+                spec.loader.exec_module(module)
+            self.assertEqual(Path(module.__file__), vendor / 'owner_wake_policy.py')
+            self.assertEqual(module.PRICE_CARD, policy.PRICE_CARD)
             self.assertFalse((root / 'rpc/vendor/calendar-2026.json').exists())
             self.assertFalse((root / 'rpc/vendor/xiaoqian_schedule/price-card.json').exists())
-            self.assertEqual((root / 'rpc/vendor/owner_wake_policy.py').read_bytes(), shim.read_bytes())
+            self.assertEqual(staged_shim.read_bytes(), shim.read_bytes())
             self.assertTrue(staging.smoke(root / 'rpc', sys.executable)['passed'])
             self.assertIn('vendor/owner_wake_policy.py', result['files'])
             self.assertIn('vendor/owner-tools/pdf-deps.zip', result['staticResources'])

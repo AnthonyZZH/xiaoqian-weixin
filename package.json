@@ -8,15 +8,23 @@
     ".": "./src/index.mjs"
   },
   "files": [
-    "src/",
-    "adapter/",
-    "driver/",
-    "vendor/",
-    "tools/",
-    "legacy/",
+    "{adapter,compat,driver,legacy,src,tools,vendor}/**/*.{mjs,js,py,pyw,css,html}",
+    "{compat/vendor,vendor}/calendar-*.json",
+    "src/rotation-observer/calculator/official-cny-snapshot.json",
+    "tools/mobile-status/{README.md,requirements.txt}",
+    "vendor/official-provider-balance/{LICENSE,PROVENANCE.json}",
+    "vendor/owner-tools/{*.md,PYPDF-LICENSE,pdf-deps.zip,source-manifest.json}",
+    "vendor/xiaoqian_schedule/price-card.json",
     "cordis.patch.yml",
-    "docs/",
-    "requirements-windows.txt"
+    "docs/*.md",
+    "docs/config.example.json",
+    "NOTICE.md",
+    "SOURCE.json",
+    "requirements-windows.txt",
+    "!**/{test,tests,__pycache__}/**",
+    "!**/*.test.*",
+    "!**/*.bak*",
+    "!**/xiaoqian_schedule/demo.py"
   ],
   "engines": {
     "node": ">=24"

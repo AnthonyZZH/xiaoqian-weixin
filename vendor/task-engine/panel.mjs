@@ -19,8 +19,14 @@ export function createPanel({engine, store, token, host = '127.0.0.1', port = 87
     if (!control || req.headers['x-xq-panel'] !== '1' || !/^application\/json\b/.test(req.headers['content-type'] || '')) return send(res, 404, 'text/plain', '');
     let raw = '';
     for await (const chunk of req) { raw += chunk; if (raw.length > 32768) return json(res, 413, {ok: false, code: 'BODY_TOO_LARGE'}); }
-    try { json(res, 200, {ok: true, result: await control.act(name, raw ? JSON.parse(raw) : {})}); }
-    catch (e) { json(res, 400, {ok: false, code: String(e?.code || 'ACTION_FAILED'), message: String(e?.message || e).slice(0, 300)}); }
+    try {
+      const result = await control.act(name, raw ? JSON.parse(raw) : {});
+      json(res, result?.restarting === true ? 202 : 200, {ok: true, result});
+    } catch (e) {
+      const code = String(e?.code || 'ACTION_FAILED');
+      const status = code === 'RESTART_SCRIPT_FAILED' ? 503 : ['RESTART_UNAVAILABLE','RESTART_PENDING'].includes(code) ? 409 : 400;
+      json(res, status, {ok: false, code, message: String(e?.message || e).slice(0, 300)});
+    }
   }
   const server = http.createServer((req, res) => {
     Promise.resolve().then(() => {

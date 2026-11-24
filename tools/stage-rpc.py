@@ -9,36 +9,70 @@ the real staged JSONL process, synthetic state and a fake UI backend only.
 import argparse,ast,hashlib,json,shutil,subprocess,tempfile
 from pathlib import Path
 
-def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
-def stage(source,policy,destination):
- source=Path(source).resolve(strict=True);policy=Path(policy).resolve(strict=True);destination=Path(destination).resolve()
- if destination.exists():raise ValueError('DESTINATION_ALREADY_EXISTS')
- if policy != destination.parent/'app/vendor':raise ValueError('CANONICAL_SIBLING_APP_VENDOR_REQUIRED')
- shim=source.parent/'rpc/vendor/owner_wake_policy.py'
- required=[source/'driver/bridge_rpc.py',policy/'owner_wake_policy.py',policy/'calendar-2026.json',policy/'xiaoqian_schedule/price-card.json',shim]
- if any(not p.is_file() or p.is_symlink() for p in required):raise ValueError('REQUIRED_RUNTIME_SOURCE_OR_ASSET_MISSING')
- calendar=json.loads(required[2].read_text(encoding='utf-8'))
- if not isinstance(calendar.get('verified_years'),list):raise ValueError('CALENDAR_CONTRACT_INVALID')
- destination.mkdir(parents=True)
- for folder in ['driver','vendor']:
-  for p in (source/folder).rglob('*.py'):
-   if '__pycache__' in p.parts or p == source/'vendor/owner_wake_policy.py':continue
-   if p.is_symlink():raise ValueError('SOURCE_SYMLINK_DENIED')
-   q=destination/p.relative_to(source);q.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,q)
- shutil.copyfile(shim,destination/'vendor/owner_wake_policy.py')
- resources=[]
- for p in destination.rglob('*.py'):
-  tree=ast.parse(p.read_text(encoding='utf-8-sig'))
-  for n in ast.walk(tree):
-   if not (isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='with_name' and n.args and isinstance(n.args[0],ast.Constant) and isinstance(n.args[0].value,str)):continue
-   if '__file__' not in ast.unparse(n.func.value):continue
-   q=p.with_name(n.args[0].value)
-   asset=source/q.relative_to(destination)
-   if not asset.is_file() or asset.is_symlink():raise ValueError('STATIC_RUNTIME_ASSET_MISSING')
-   shutil.copyfile(asset,q)
-   resources.append(q.relative_to(destination).as_posix())
- manifest={p.relative_to(destination).as_posix():digest(p) for p in destination.rglob('*') if p.is_file()}
- return {'files':manifest,'staticResources':sorted(set(resources))}
+def adjacent_assets(module):
+    """Find literal Path(__file__).with_name('asset') references in a source module."""
+    tree = ast.parse(module.read_text(encoding="utf-8-sig"))
+    for call in ast.walk(tree):
+        if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
+            continue
+        if call.func.attr != "with_name" or "__file__" not in ast.unparse(call.func.value):
+            continue
+        if call.args and isinstance(call.args[0], ast.Constant) and isinstance(call.args[0].value, str):
+            yield module.with_name(call.args[0].value)
+
+
+def stage(source, policy, destination, *, smoke_python=None):
+    source = Path(source).resolve(strict=True)
+    policy = Path(policy).resolve(strict=True)
+    destination = Path(destination).resolve()
+    if destination.exists():
+        raise ValueError("DESTINATION_ALREADY_EXISTS")
+    if policy != destination.parent / "app/vendor":
+        raise ValueError("CANONICAL_SIBLING_APP_VENDOR_REQUIRED")
+    shim = Path(__file__).with_name("rpc-policy-shim.py")
+    calendar = policy / "calendar-2026.json"
+    required = [source / "driver/bridge_rpc.py", policy / "owner_wake_policy.py",
+                calendar, policy / "xiaoqian_schedule/price-card.json", shim]
+    if any(not item.is_file() or item.is_symlink() for item in required):
+        raise ValueError("REQUIRED_RUNTIME_SOURCE_OR_ASSET_MISSING")
+    if not isinstance(json.loads(calendar.read_text(encoding="utf-8")).get("verified_years"), list):
+        raise ValueError("CALENDAR_CONTRACT_INVALID")
+
+    policy_path = Path("vendor/owner_wake_policy.py")
+    files = {policy_path: shim}
+    resources = set()
+    for folder in ["driver", "vendor"]:
+        for module in (source / folder).rglob("*.py"):
+            relative = module.relative_to(source)
+            if relative == policy_path or {"test", "tests", "__pycache__"}.intersection(relative.parts):
+                continue
+            if relative.as_posix() == "vendor/xiaoqian_schedule/demo.py":
+                continue
+            if module.is_symlink():
+                raise ValueError("SOURCE_SYMLINK_DENIED")
+            files[relative] = module
+            for asset in adjacent_assets(module):
+                if not asset.is_file() or asset.is_symlink():
+                    raise ValueError("STATIC_RUNTIME_ASSET_MISSING")
+                asset_path = asset.relative_to(source)
+                files[asset_path] = asset
+                resources.add(asset_path.as_posix())
+
+    # The temporary RPC is a sibling of app/, so the smoke check resolves the
+    # same policy it will use after rename. A failed build remains retryable.
+    with tempfile.TemporaryDirectory(dir=destination.parent, prefix=".rpc-stage-") as scratch:
+        output = Path(scratch)
+        manifest = {}
+        for relative, original in sorted(files.items()):
+            target = output / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(original, target)
+            manifest[relative.as_posix()] = hashlib.sha256(target.read_bytes()).hexdigest()
+        result = {"files": manifest, "staticResources": sorted(resources)}
+        if smoke_python:
+            result["smoke"] = smoke(output, smoke_python)
+        output.rename(destination)
+    return result
 
 def smoke(destination,python):
  destination=Path(destination).resolve(strict=True)
@@ -57,7 +91,6 @@ def smoke(destination,python):
 
 if __name__=='__main__':
  ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('source');ap.add_argument('policy');ap.add_argument('destination');ap.add_argument('--smoke-python')
- a=ap.parse_args();result=stage(a.source,a.policy,a.destination)
- if a.smoke_python:result['smoke']=smoke(a.destination,a.smoke_python)
+ a=ap.parse_args();result=stage(a.source,a.policy,a.destination,smoke_python=a.smoke_python)
  (Path(a.destination)/'rpc-source-manifest.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
  print(json.dumps({'files':len(result['files']),'staticResources':result['staticResources'],'smoke':result.get('smoke')}))

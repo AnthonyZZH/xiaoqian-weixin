@@ -21,12 +21,14 @@ The first coordinated restart rolled back because a code-only `.py` copy omitted
 JSONL handshake. Python AST checks do not catch missing runtime data. The corrected
 package includes the calendar from the same policy snapshot and pins its hash.
 
-Use `tools/stage-rpc.py RPC_SOURCE_ROOT POLICY_SNAPSHOT_ROOT NEW_DEST
---smoke-python ABSOLUTE_PYTHON` (one command line). The source root must contain the
-reviewed driver/ and vendor/ implementations; the policy root contains
-owner_wake_policy.py and calendar-2026.json. It copies Python source and this explicit
-public resource, not arbitrary JSON, databases or live state. Inspect the resulting
-manifest and run the actual final directory through initialize, health and close.
+Use `tools/stage-rpc.py RPC_SOURCE_ROOT INSTALL_ROOT/app/vendor INSTALL_ROOT/rpc
+--smoke-python ABSOLUTE_PYTHON` (one command line). The source root contains the
+driver/ and vendor/ implementations. The sibling app/vendor contains
+owner_wake_policy.py, calendar-2026.json and xiaoqian_schedule/price-card.json.
+The staged RPC loads this installed policy through the shim shipped with the tool.
+It copies driver modules and their adjacent runtime assets, including the PDF reader
+dependency. The smoke check runs initialize, health and close before the RPC is
+moved into place. The CLI writes the resulting hashes to rpc-source-manifest.json.
 The smoke starts the real RPC process with synthetic state and fake UI. It does not
 prove that the real WeChat desktop can be controlled.
 

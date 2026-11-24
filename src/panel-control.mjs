@@ -11,6 +11,9 @@ const readJson=(file,fallback)=>{try{return JSON.parse(fs.readFileSync(file,'utf
 function writeJson(file,value){const temp=file+'.'+process.pid+'.tmp';fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n',{mode:0o600});fs.renameSync(temp,file);}
 const tail=(file,lines)=>{try{return fs.readFileSync(file,'utf8').trimEnd().split('\n').slice(-lines);}catch{return [];}};
 
+const startedAt = new Date(performance.timeOrigin).toISOString();
+const hostInstance = process.pid + '/' + performance.timeOrigin;
+
 /** options: {settingsFile, patchFile, restartScript, secretsFile, secretsWritable} — all optional; without the first
  *  two the panel can still pause/resume and manage tasks, but cannot change settings.
  *  Keys are read-only by default: they are set on the machine itself (system environment variables, like the
@@ -22,25 +25,49 @@ export function createPanelControl({getCore,engine,stateDir,options={},env=proce
  const savedSecrets=()=>options.secretsFile?readJson(options.secretsFile,{}):{};
  const secretState=()=>{const saved=savedSecrets();return Object.fromEntries(SECRET_NAMES.map(n=>[n,!!(saved[n]||env[n])]));};
  const typed=body=>Object.fromEntries(SECRET_NAMES.map(n=>[n,typeof body.secrets?.[n]==='string'?body.secrets[n].trim():'']).filter(([,v])=>v));
+ let restartPendingUntil = 0;
+ function hasRestartScript() {
+  const file = options.restartScript;
+  if (typeof file !== 'string' || path.extname(file).toLowerCase() !== '.ps1') return false;
+  try {
+   fs.accessSync(file, fs.constants.R_OK);
+   return fs.statSync(file).isFile();
+  } catch { return false; }
+ }
+ function checkRestart() {
+  if (!hasRestartScript()) fail('RESTART_UNAVAILABLE','这台主机没有可用的重启脚本。');
+  if (Date.now() < restartPendingUntil) fail('RESTART_PENDING','已有重启请求，正在等待新实例。');
+ }
  function status(){
   const core=getCore(),lastRead=tail(path.join(stateDir,'driver','read-outcomes-node.jsonl'),12).map(l=>{try{return JSON.parse(l);}catch{return null;}}).filter(r=>r?.phase==='terminal').at(-1);
   const model=core?.model||{};
-  return {at:new Date().toISOString(),startedAt:new Date(Date.now()-process.uptime()*1000).toISOString(),paused:core?core.store.data.paused===true:null,
+  return {at:new Date().toISOString(),startedAt,hostInstance,paused:core?core.store.data.paused===true:null,
    model:{provider:model.provider,model:model.model},drawing:typeof core?.capabilities?.draw==='function',
    lastRead:lastRead?{at:lastRead.at,outcome:lastRead.outcome,code:lastRead.code}:null,
    errors:tail(path.join(stateDir,'loop-errors.log'),5).map(l=>l.slice(0,240)),
-   can:{configure:canConfigure,restart:!!options.restartScript,setKeys:keysWritable}};
+   restartPending:Date.now()<restartPendingUntil,
+   can:{configure:canConfigure,restart:hasRestartScript(),setKeys:keysWritable}};
  }
- function restart(){
-  if(!options.restartScript)fail('RESTART_UNAVAILABLE','这个部署没有配置重启脚本');
-  // The script re-launches itself outside this process tree, restarts the host, and restores the previous
-  // configuration if the host does not come back.
-  // Not `detached`: on Windows a detached, hidden PowerShell exits without running the script. The script only
-  // creates a one-off scheduled task and returns, and that task is what outlives this process.
-  const child=spawnImpl('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',options.restartScript],{stdio:'ignore',windowsHide:true});
-  child.on?.('error',()=>{});
-  child.unref?.();
-  return {restarting:true};
+ async function restart() {
+  checkRestart();
+  restartPendingUntil = Date.now() + 90_000;
+  try {
+   const child = spawnImpl('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',path.resolve(options.restartScript)],{stdio:'ignore',windowsHide:true});
+   // A successful script may only have scheduled another process. The panel observes the replacement host separately.
+   const restartStatus = await new Promise((resolve,reject) => {
+    const timer = setTimeout(() => resolve('unconfirmed'), 15_000);
+    child.once('error', error => { clearTimeout(timer); reject(error); });
+    child.once('close', code => {
+     clearTimeout(timer);
+     if (code === 0) resolve('script-exited');
+     else reject(new Error('RESTART_SCRIPT_FAILED'));
+    });
+   });
+   return {restarting:true,restartStatus,hostInstance};
+  } catch {
+   restartPendingUntil = 0;
+   fail('RESTART_SCRIPT_FAILED','重启脚本未能成功执行，请在主机上检查。');
+  }
  }
  const actions={
   'bridge/pause':()=>{getCore().pause();return {paused:true};},
@@ -48,8 +75,10 @@ export function createPanelControl({getCore,engine,stateDir,options={},env=proce
   'task/cancel':({id})=>engine.cancel(Number(id)),
   'task/retry':({id,stepId})=>engine.retry(Number(id),stepId||null).task,
   'host/restart':restart,
-  'settings/save':body=>{
+  'settings/save':async body=>{
    if(!canConfigure)fail('SETTINGS_UNAVAILABLE','这个部署没有开放在面板里改设置');
+   if(body.restart===false&&Date.now()<restartPendingUntil)fail('RESTART_PENDING','已有重启请求，请等新实例上线后再保存。');
+   if(body.restart!==false)checkRestart();
    const next=normalizeSettings(body.settings),patch=applySettings(readJson(options.patchFile,null),next);
    const secrets=savedSecrets(),incoming=typed(body);
    if(Object.keys(incoming).length&&!keysWritable)fail('SECRETS_READ_ONLY','密钥只能在小千所在的电脑上设置，面板里不能输入');
@@ -60,7 +89,10 @@ export function createPanelControl({getCore,engine,stateDir,options={},env=proce
    fs.copyFileSync(options.patchFile,options.patchFile+'.prev');
    if(fs.existsSync(options.settingsFile))fs.copyFileSync(options.settingsFile,options.settingsFile+'.prev');else fs.rmSync(options.settingsFile+'.prev',{force:true});
    writeJson(options.patchFile,patch);writeJson(options.settingsFile,next);
-   return {saved:true,settings:next,secrets:secretState(),...(body.restart===false?{}:restart())};
+   const result={saved:true,settings:next,secrets:secretState()};
+   if(body.restart===false)return result;
+   try { return {...result,...await restart()}; }
+   catch (error) { return {...result,restarting:false,restartStatus:'failed',message:error.message}; }
   },
   // Reachability only: asks the endpoint for its model list. It never sends a prompt and costs nothing.
   'settings/test':async body=>{
