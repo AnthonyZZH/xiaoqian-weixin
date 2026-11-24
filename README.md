@@ -246,6 +246,9 @@ Harness home 与模型配置 · 桥接状态目录（会话映射、收发账本
 Set-Location $Repo
 $env:XQ_TEST_PYTHON     = "$Private\venv\Scripts\python.exe"
 $env:XQ_COMPAT_RPC_PATH = "$Repo\compat\driver\bridge_rpc.py"
+$env:XQ_NATIVE_PACKAGE_ROOT = "$HostRoot/node_modules/@deepseek-ai/"
+$env:XQ_TEST_NATIVE_ROOT = $env:XQ_NATIVE_PACKAGE_ROOT
+$env:DSH_PACKAGE_ROOT = $env:XQ_NATIVE_PACKAGE_ROOT
 npm run check
 npm test
 ```

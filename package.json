@@ -23,6 +23,8 @@
     "requirements-windows.txt",
     "!**/{test,tests,__pycache__}/**",
     "!**/*.test.*",
+    "!**/test_*.py",
+    "!**/test.mjs",
     "!**/*.bak*",
     "!**/xiaoqian_schedule/demo.py"
   ],

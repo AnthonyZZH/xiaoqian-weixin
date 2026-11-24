@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {createBillingCollector,billingProviderFetch} from '../src/billing/collector.mjs';
 import {buildBillingAdapter} from '../src/billing/adapter-builder.mjs';
 import {buildOfficialBalanceShim} from '../src/balance-shim-builder.mjs';
-const native='C:/xiaoqian/app/dsh/node_modules/@deepseek-ai';
+const native = process.env.XQ_NATIVE_PACKAGE_ROOT || process.env.XQ_TEST_NATIVE_ROOT;
 const load=n=>import(pathToFileURL(path.join(native,n,'lib/index.js')).href);
 const body={model:'deepseek-flash',max_tokens:32,system:'SYNTHETIC_PERSONA_DO_NOT_PERSIST',tools:[{name:'synthetic_tool',description:'SYNTHETIC_TOOL_DESC',input_schema:{type:'object'}}],messages:[{role:'user',content:[{type:'text',text:'SYNTHETIC_CHAT_DO_NOT_PERSIST'}]}]};
 const context={sessionId:'SYNTHETIC_SESSION',provider:'deepseek-official',model:'deepseek-flash'};
@@ -50,6 +50,7 @@ test('strict family changes for system, tools and host ACL',async t=>{
  assert.equal(new Set(rows().map(v=>v.family)).size,3);
 });
 test('installed SDK final serializer, extensions, provider mount/unmount, duplicates and balance shim composition',async t=>{
+ assert.ok(native, 'Set XQ_NATIVE_PACKAGE_ROOT to the installed @deepseek-ai namespace');
  const {root,rows}=fixture(t);const oldFetch=globalThis.fetch;let calls=0;
  globalThis.fetch=async(url,init)=>{calls++;assert.equal(url,'https://api.deepseek.com/anthropic/v1/messages');assert.equal(JSON.parse(init.body).dsh_synthetic_extension,1);return new Response(stream(),{headers:{'content-type':'text/event-stream'}});};
  t.after(()=>{globalThis.fetch=oldFetch;});

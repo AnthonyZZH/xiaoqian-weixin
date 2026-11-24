@@ -28,7 +28,7 @@ test('the npm archive loads the plugin and the documented compatibility driver',
     'vendor/owner-tools/PYPDF-LICENSE', 'tools/mobile-status/mobile_status_server.pyw',
   ]) assert.ok(paths.includes(required), 'missing ' + required);
   assert.deepEqual(paths.filter(file =>
-    /(^|\/)(__pycache__|tests?|node_modules)\/|\.test\.|\.bak|\.pyc$|^docs\/.+source.*\.json$/i.test(file)), []);
+    /(^|\/)(__pycache__|tests?|node_modules)\/|(^|\/)(test_.*\.py|test\.mjs)$|\.test\.|\.bak|\.pyc$|^docs\/.+source.*\.json$/i.test(file)), []);
 
   execFileSync('tar', ['-xzf', path.join(scratch, archive.filename), '-C', scratch]);
   const unpacked = path.join(scratch, 'package');

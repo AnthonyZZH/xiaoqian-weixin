@@ -1,8 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';import {pathToFileURL} from 'node:url';
 import {WeChatCore} from '../src/core.mjs';import {OwnerDecisionBridge,expireOwnerWake} from '../src/owner-decision-bridge.mjs';
-const native='C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/';
-const load=name=>import(pathToFileURL(native+name+'/lib/index.js').href);
+const native = process.env.XQ_NATIVE_PACKAGE_ROOT || process.env.XQ_TEST_NATIVE_ROOT;
+assert.ok(native, 'Set XQ_NATIVE_PACKAGE_ROOT to the installed @deepseek-ai namespace');
+const load = name => import(pathToFileURL(path.join(native, name, 'lib/index.js')).href);
 const {Context}=await load('cordis'),{LlmAdapter}=await load('dsh-llm');
 let offlineTurns=0;
 class Offline extends LlmAdapter{

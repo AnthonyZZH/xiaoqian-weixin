@@ -24,6 +24,7 @@ test('native frame end/disposal clears state and different lifecycle avoids atte
 });
 test('installed native loop correlates host user/wake to real turns and one-to-many physical attempts offline',async()=>{
  const {spawnSync}=await import('node:child_process');const {fileURLToPath}=await import('node:url');
- const p=spawnSync(process.execPath,[fileURLToPath(new URL('./helpers/billing-origin-native-child.mjs',import.meta.url))],{encoding:'utf8',timeout:15000,env:Object.fromEntries(['SystemRoot','WINDIR','PATH','PATHEXT','TEMP','TMP'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]))});
+ const allowed = ['SystemRoot','WINDIR','PATH','PATHEXT','TEMP','TMP','XQ_NATIVE_PACKAGE_ROOT','XQ_TEST_NATIVE_ROOT'];
+ const p=spawnSync(process.execPath,[fileURLToPath(new URL('./helpers/billing-origin-native-child.mjs',import.meta.url))],{encoding:'utf8',timeout:15000,env:Object.fromEntries(allowed.filter(k=>process.env[k]).map(k=>[k,process.env[k]]))});
  assert.equal(p.status,0,p.stderr||p.stdout||String(p.error));const v=JSON.parse(p.stdout.trim().split(/\r?\n/).at(-1));assert.equal(v.native,true);assert.deepEqual(v.origins,['natural_user','natural_user','wake']);assert.equal(v.physicalAttempts,3);assert.equal(v.nativeAttempts,2);assert.equal(v.sends,0);
 });

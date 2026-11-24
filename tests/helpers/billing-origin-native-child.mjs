@@ -1,6 +1,9 @@
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import crypto from 'node:crypto';import assert from 'node:assert/strict';import {pathToFileURL} from 'node:url';
 import {createBillingCollector,billingProviderFetch} from '../../src/billing/collector.mjs';import {bindOwnerBilling} from '../../src/billing/owner-binding.mjs';import {WeChatCore} from '../../src/core.mjs';
-const root='C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/',load=n=>import(pathToFileURL(root+n+'/lib/index.js').href),sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+const root = process.env.XQ_NATIVE_PACKAGE_ROOT || process.env.XQ_TEST_NATIVE_ROOT;
+assert.ok(root, 'Set XQ_NATIVE_PACKAGE_ROOT to the installed @deepseek-ai namespace');
+const load = name => import(pathToFileURL(path.join(root, name, 'lib/index.js')).href);
+const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 const {Context}=await load('cordis'),{LlmAdapter}=await load('dsh-llm'),ctx=new Context(),fibers=[],errors=[],nativeFrames=[];
 const scratch=fs.mkdtempSync(path.join(os.tmpdir(),'xq-origin-native-')),billing=createBillingCollector({root:path.join(scratch,'metadata')});let core,request=0,sends=0;
 ctx.on('agent/error',x=>errors.push(String(x?.error?.code||'error')));
