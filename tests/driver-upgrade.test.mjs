@@ -12,7 +12,7 @@ const mid=key=>hash(JSON.stringify([chatKey,key]));
 const complete=(key,text,extra={})=>({key,text,role:'user',text_complete:true,text_source:'synthetic_full',text_reason:'',...extra});
 async function open(root,rows,records,rpcPath){
  const agents={async create(o){const agent={session:{id:o.sessionId||o.resumeSessionId},inbox:{nextTurn:[]},followup:m=>records.push(m)};await o.setup({tools:{restrict(){},guard(){},register(){}},systemPrompt:{section(){}},on(){}},agent);return{agent,async dispose(){}}}};agents.resume=agents.create;
- const b=await createBridge({agents,sessions:{async flush(){return true}}},{stateDir:root,mode:'mock',driverRpcPath:rpcPath,python:process.env.XQ_TEST_PYTHON||'python',chats:[chat],mock:{snapshots:{[chatKey]:rows}}},{defineTool:x=>x});b.core.resume();return b;
+ const b=await createBridge({agents,sessions:{async flush(){return true}}},{stateDir:root,mode:'mock',autoImages:false,driverRpcPath:rpcPath,python:process.env.XQ_TEST_PYTHON||'python',chats:[chat],mock:{snapshots:{[chatKey]:rows}}},{defineTool:x=>x});b.core.resume();return b;
 }
 test('real Python bridge maps old consumed alias, accepts only new trailing row, ACKs across restart',async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'xq-upgrade-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));const records=[];
@@ -40,4 +40,26 @@ test('unmatched upgrade snapshot is retained without replay; later independent n
  }finally{await b.core.close();}
 });
 
-test('explicit pinned legacy RPC preserves unknown input and handles independent new message once',{skip:!process.env.XQ_COMPAT_RPC_PATH},async t=>{const rpc=process.env.XQ_COMPAT_RPC_PATH;assert.ok(rpc,'set explicit trusted previous RPC source for cutover acceptance');const root=fs.mkdtempSync(path.join(os.tmpdir(),'xq-legacy-cutover-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));const records=[];const rows=[complete('old-unknown','SYNTHETIC OLD UNKNOWN'),complete('fresh','SYNTHETIC FRESH')];const b=await open(root,rows,records,rpc);try{const s=b.core.state('owner');s.bootstrapped=true;s.messages[hash(mid('old-unknown'))]={status:'unknown'};b.core.store.save();const first=await b.core.poll('owner');assert.equal(first.accepted,1);assert.equal(records.length,1);assert.match(JSON.stringify(records),/SYNTHETIC FRESH/);assert.doesNotMatch(JSON.stringify(records),/SYNTHETIC OLD UNKNOWN/);assert.equal(s.messages[hash(mid('old-unknown'))].status,'unknown');await b.core.poll('owner');assert.equal(records.length,1);assert.equal(s.identityVersion,undefined);}finally{await b.core.close();}});
+test('explicit compatibility RPC preserves unknown input and handles independent new input once',
+ {skip:!process.env.XQ_COMPAT_RPC_PATH},async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'xq-legacy-cutover-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const records=[];
+  const rows=[complete('old-unknown','SYNTHETIC OLD UNKNOWN'),complete('fresh','SYNTHETIC FRESH')];
+  const b=await open(root,rows,records,process.env.XQ_COMPAT_RPC_PATH);
+  try{
+    const s=b.core.state('owner');
+    s.bootstrapped=true;s.messages[hash(mid('old-unknown'))]={status:'unknown'};b.core.store.save();
+    const wire=await b.driver.call('read',{targetId:'owner'});
+    assert.equal(wire.status,'ok');
+    assert.ok(wire.identityVersion==null||wire.identityVersion==='uia-row-v2');
+    const first=await b.core.poll('owner');
+    assert.equal(first.accepted,1);assert.equal(records.length,1);
+    assert.match(JSON.stringify(records),/SYNTHETIC FRESH/);
+    assert.doesNotMatch(JSON.stringify(records),/SYNTHETIC OLD UNKNOWN/);
+    assert.equal(s.messages[hash(mid('old-unknown'))].status,'unknown');
+    assert.equal((await b.core.poll('owner')).accepted,0);
+    assert.equal(records.length,1);
+    assert.equal(s.identityVersion,wire.identityVersion??undefined);
+  }finally{await b.core.close();}
+});

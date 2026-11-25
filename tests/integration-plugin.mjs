@@ -4,19 +4,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createBridge} from '../src/index.mjs';
+import {turnEvents} from './helpers/turn-events.mjs';
 
 const project=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const scratch=path.join(project,'.test-scratch');
 const chats=[{id:'owner',title:'Owner test',mode:'private',owner:true},{id:'group',title:'Group test',mode:'group',owner:false}];
 function nativeMock(){
  const instances=[];
- const agents={async create(options){const definitions=[];const instance={options,definitions};const agent={session:{id:options.sessionId},followup(m){assert.equal(m.role,'user');assert.equal(typeof m.id,'string');},inject(){}};instance.agent=agent;
- await options.setup({tools:{restrict(filter){instance.allow=filter.allow;},guard(fn){instance.guard=fn;},register(def){definitions.push(def);}},systemPrompt:{section(){}}},agent);
+ const agents={async create(options){const definitions=[];const instance={options,definitions};const events=turnEvents();const agent={session:{id:options.sessionId},followup(m){assert.equal(m.role,'user');assert.equal(typeof m.id,'string');events.followup(this.session,m);},inject(){}};instance.agent=agent;
+ await options.setup({on:events.on,tools:{restrict(filter){instance.allow=filter.allow;},guard(fn){instance.guard=fn;},register(def){definitions.push(def);}},systemPrompt:{section(){}}},agent);
  instances.push(instance);return {agent,async dispose(){}};},async resume(options){return this.create(options);}};
  return {instances,agents,sessions:{async flush(){return true;}}};
 }
 async function fixture(t){fs.mkdirSync(scratch,{recursive:true});const stateDir=fs.mkdtempSync(path.join(scratch,'plugin-'));const ctx=nativeMock();const driver={calls:[],async call(operation,args){this.calls.push({operation,args});return {status:'ok',messages:[]};},pause(){},resume(){},async close(){}};
- const bridge=await createBridge(ctx,{stateDir,chats,mode:'mock'},{defineTool:def=>def,driver});t.after(async()=>{await bridge.core.close();const safe=path.resolve(stateDir);assert.ok(safe.startsWith(path.resolve(scratch)+path.sep));fs.rmSync(safe,{recursive:true,force:true});});bridge.core.resume();return {bridge,ctx,driver};}
+ const bridge=await createBridge(ctx,{stateDir,chats,mode:'mock',autoImages:false},{defineTool:def=>def,driver});t.after(async()=>{await bridge.core.close();const safe=path.resolve(stateDir);assert.ok(safe.startsWith(path.resolve(scratch)+path.sep));fs.rmSync(safe,{recursive:true,force:true});});bridge.core.resume();return {bridge,ctx,driver};}
 
 test('native plugin scopes group registrations and checks explicit execution Agent',async t=>{
  const {bridge,ctx,driver}=await fixture(t);await bridge.core.ingest({chatId:'group',messages:[{id:'m',text:'hello'}]});const instance=ctx.instances[0];

@@ -44,10 +44,13 @@ test('successful send is not repeated across process restart and changed payload
 });
 
 test('hung send is unknown, worker recovers for reads, send fence persists after restart',async t=>{
-  const {client,args}=fixture(t,{timeoutMs:300,mock:{hangOperations:['send_text']}});
+  const {client,args}=fixture(t,{mock:{hangOperations:['send_text']}});
+  assert.equal((await client.call('health')).status,'ok');
+  client.timeoutMs=300;
   const request={targetId:'owner',text:'hang fixture',idempotencyKey:'hang-1'};
   const unknown=await client.call('send_text',request);
   assert.equal(unknown.status,'unknown');
+  client.timeoutMs=args.timeoutMs;
   assert.equal((await client.call('health')).status,'ok');
   assert.equal(client.generation,2);
   assert.equal((await client.call('send_text',{...request,idempotencyKey:'new-key'})).code,'SEND_RECONCILIATION_REQUIRED');
@@ -71,8 +74,11 @@ test('paused active send becomes uncertain; queued UI work does not run until re
 });
 
 test('read timeout does not fence sending and future worker starts cleanly',async t=>{
-  const {client}=fixture(t,{timeoutMs:300,mock:{hangOperations:['read']}});
+  const {client,args}=fixture(t,{mock:{hangOperations:['read']}});
+  assert.equal((await client.call('health')).status,'ok');
+  client.timeoutMs=300;
   assert.equal((await client.call('read',{targetId:'owner'})).code,'DRIVER_TIMEOUT');
+  client.timeoutMs=args.timeoutMs;
   assert.equal((await client.call('send_text',{targetId:'owner',text:'after read failure',idempotencyKey:'after-timeout'})).status,'ok');
 });
 

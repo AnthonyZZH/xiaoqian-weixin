@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createBridge} from '../src/index.mjs';
+import {turnEvents} from './helpers/turn-events.mjs';
 
 const packageRoot=process.env.DSH_PACKAGE_ROOT||'C:/xiaoqian/app/dsh/node_modules/@deepseek-ai';
 test('server installed rc.4 defineTool validates real plugin tool contracts without model or UI',{skip:!fs.existsSync(path.join(packageRoot,'dsh-tools/lib/index.js'))},async()=>{
@@ -15,8 +16,9 @@ test('server installed rc.4 defineTool validates real plugin tool contracts with
   let actualAgent;
   const ctx={
     agents:{async create(options){
-      const agent={session:{id:options.sessionId},followup(){},inject(){}};actualAgent=agent;
-      await options.setup({tools:{restrict(){},guard(){},register(t){definitions.push(t);}},systemPrompt:{section(){}}},agent);
+      const events=turnEvents();
+      const agent={session:{id:options.sessionId},followup(m){events.followup(this.session,m);},inject(){}};actualAgent=agent;
+      await options.setup({on:events.on,tools:{restrict(){},guard(){},register(t){definitions.push(t);}},systemPrompt:{section(){}}},agent);
       return {agent,async dispose(){}};
     }},
     sessions:{async flush(){return true;}}

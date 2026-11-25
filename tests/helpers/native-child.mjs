@@ -3,7 +3,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 const root=process.env.XQ_NATIVE_PACKAGE_ROOT||'C:/xiaoqian/app/dsh/node_modules/@deepseek-ai/';
-const load=async n=>import(pathToFileURL(root+n+'/lib/index.js').href);
+const load=async n=>import(pathToFileURL(path.join(root,n,'lib/index.js')).href);
 const {Context}=await load('cordis');const {LlmAdapter}=await load('dsh-llm');
 const ctx=new Context(),fibers=[];let bridge;
 const errors=[];ctx.on('agent/error',(...args)=>errors.push(args.map(x=>({keys:Object.keys(x||{}),code:x?.code,message:x?.message,error:x?.error?.stack,failure:x?.failure,reason:x?.reason}))));
@@ -13,10 +13,15 @@ class Offline extends LlmAdapter{
 try{
  for(const n of ['dsh-system-prompt','dsh-session','dsh-agent','dsh-llm','dsh-tools','dsh-session-projection','dsh-agent-loop'])fibers.push(ctx.plugin((await load(n)).default,{}));
  fibers.push(ctx.plugin(await load('dsh-session-persistence-jsonl'),{root:path.join(process.argv[3],'sessions'),compression:'none'}));
+ fibers.push(ctx.plugin((await load('dsh-attachment-local')).default,{root:path.join(process.argv[3],'attachments')}));
  fibers.push(ctx.plugin({inject:['llm'],apply(c){c.llm.registerAdapter(['offline'],new Offline());}},{}));
  for(const f of fibers)await f.await();
- const {defineTool}=await load('dsh-tools');
- const plugin=await import('../../src/index.mjs');const pluginFiber=ctx.plugin(plugin,{enabled:true,startPaused:true,stateDir:path.join(process.argv[3],'bridge'),mode:'mock',nativePackageRoot:root,model:{provider:'offline',model:'offline'},chats:[{id:'test',title:'Synthetic Only',mode:'group',owner:false}]});fibers.push(pluginFiber);await pluginFiber.await();bridge=ctx.xiaoqianBridge;assert.ok(bridge,'native plugin activation must expose bridge');
+ const plugin=await import('../../src/index.mjs');const pluginFiber=ctx.plugin(plugin,{enabled:true,startPaused:true,stateDir:path.join(process.argv[3],'bridge'),mode:'mock',
+  python:process.env.XQ_TEST_PYTHON||'python',driverRpcPath:process.env.XQ_COMPAT_RPC_PATH,
+  nativePackageRoot:root,model:{provider:'offline',model:'offline'},chats:[
+   {id:'test',title:'Synthetic Only',mode:'group',owner:false},
+   {id:'owner',title:'Synthetic Scheduler Owner',mode:'private',owner:true}
+  ]});fibers.push(pluginFiber);await pluginFiber.await();bridge=ctx.xiaoqianBridge;assert.ok(bridge,'native plugin activation must expose bridge');
  bridge.core.resume();await bridge.core.ingest({chatId:'test',messages:[{id:process.argv[2],text:'Synthetic input '+process.argv[2]}]});
  const h=bridge.core.handles.get('test');await h.agent.whenIdle();assert.equal(await ctx.sessions.flush(h.agent.session),true);
  const messages=h.agent.session.deriveMessages();const users=messages.filter(m=>m.role==='user');

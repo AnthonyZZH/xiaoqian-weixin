@@ -15,7 +15,7 @@ async function fixture(t,{services={},searchEnabled=true}={}){
   await options.setup(context,agent);registries.set(agent,{tools,context});return{agent,async dispose(){}};
  }};agents.resume=agents.create;
  const driver={resume(){},pause(){},async close(){},async call(){throw new Error('NO_REAL_SEND');}};
- const bridge=await createBridge({agents,sessions:{async flush(){return true}}},{stateDir:root,mode:'mock',searchEnabled,chats},{driver,defineTool:x=>x,ownerServices:services});
+ const bridge=await createBridge({agents,sessions:{async flush(){return true}}},{stateDir:root,mode:'mock',autoImages:false,searchEnabled,chats},{driver,defineTool:x=>x,ownerServices:services});
  bridge.core.resume();const owner=(await bridge.core.handle('owner')).agent,group=(await bridge.core.handle('group')).agent;
  t.after(async()=>{await bridge.core.close();fs.rmSync(root,{recursive:true,force:true});});
  const invoke=(name,args,agent=owner)=>registries.get(owner).tools.get(name).execute(args,{agent,callId:'synthetic-call-'+Math.random(),signal:new AbortController().signal});
@@ -26,7 +26,7 @@ test('search registers only for owner and sends exact query to independent worke
  assert.ok(f.registries.get(f.owner).tools.has('owner_search'));assert.ok(!f.registries.get(f.group).tools.has('owner_search'));
  assert.equal(f.registries.get(f.group).context.guard({name:'owner_search'}),'WECHAT_TOOL_SCOPE_DENIED');
  const result=await f.invoke('owner_search',{query:'public synthetic'});assert.equal(result.results.length,1);
- assert.deepEqual(calls,[{operation:'search',query:'public synthetic'}]);
+ assert.deepEqual(calls,[{operation:'search',queries:['public synthetic'],skip:[]}]);
  assert.equal(f.core.store.data.audit.at(-1).code,'OWNER_TOOL_OK');
  await assert.rejects(f.invoke('owner_search',{query:'foreign'},f.group),/OWNER_AGENT_MISMATCH/);assert.equal(calls.length,1);
 });

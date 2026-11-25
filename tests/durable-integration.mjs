@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
 import {createBridge} from '../src/index.mjs';
 
 const chat={id:'fake_group',title:'Synthetic Group',mode:'group',owner:false};
+const owner={id:'fake_owner',title:'Synthetic Owner',mode:'private',owner:true};
 const chatKey=createHash('sha256').update(JSON.stringify({mode:chat.mode,name:chat.title})).digest('hex');
 fs.mkdirSync(path.resolve('.test-scratch'),{recursive:true});
 function agentHost(records){
@@ -20,7 +22,8 @@ function agentHost(records){
   }
 }
 async function fixture(dir,records,{flush=true,faults={},mediaImportRoots=[],initiative={},snapshots,images={},transcripts={}}={}){
-  const config={chats:[chat],stateDir:dir,mode:'mock',startPaused:true,
+  const config={chats:[owner,chat],stateDir:dir,mode:'mock',startPaused:true,
+    autoImages:false,python:process.env.XQ_TEST_PYTHON||'python',
     mediaImportRoots,initiative,timeZone:'UTC',
     mock:{snapshots:snapshots||{[chatKey]:[{key:'synthetic-1',text:'hello',role:'user'}]},faults,images,transcripts}};
   const bridge=await createBridge({agents:agentHost(records),sessions:{async flush(){return flush;}}},config,{defineTool:x=>x});
@@ -43,7 +46,7 @@ test('real Python subprocess ACKs only durable native and bridge receipts across
   }finally{await b.core.close();}
 });
 
-test('voice transcription and image screenshot are scoped and captured before ACK',async t=>{
+test('group voice is transcribed and group image pixels stay outside the model and media store',async t=>{
   const dir=fs.mkdtempSync(path.join(path.resolve('.test-scratch'),'python-perception-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
@@ -58,11 +61,10 @@ test('voice transcription and image screenshot are scoped and captured before AC
     assert.equal((await b.driver.call('read',{targetId:chat.id})).messages.length,0);
     assert.match(JSON.stringify(records),/synthetic voice words/);
     const pending=await b.media.catalog({scope:chat.id,includePending:true});
-    assert.equal(pending.length,1);assert.equal(pending[0].source_kind,'static_capture');
-    assert.equal(pending[0].info.animated,false);
-    const preview=await b.media.previewForVision(chat.id,pending[0].media_id);
-    assert.match(preview.label,/静态截图/);
-    assert.equal(preview.base64,png);
+    assert.equal(pending.length,0);
+    assert.match(records[1].content[0].text,/"pixelsDelivered":false/);
+    assert.ok(records[1].content.every(block=>block.type!=='image'));
+    assert.ok(!JSON.stringify(records).includes(png));
   }finally{await b.core.close();}
 });
 
@@ -75,10 +77,15 @@ test('durable initiative claims, model wake and one send survive restart without
   let b=await fixture(dir,records,{initiative});
   try{
     assert.deepEqual(await b.initiative.tick(e=>b.core.wake(e.chatId,e)),[]);
-    await new Promise(resolve=>setTimeout(resolve,1350));
+    const clock=new DatabaseSync(path.join(dir,'schedule','schedule.sqlite3'));
+    try {
+      const due=clock.prepare('UPDATE chats SET next_at=0 WHERE key IN (SELECT chat_key FROM owner_wake_state)').run();
+      assert.equal(due.changes,1);
+    } finally { clock.close(); }
     const first=await b.initiative.tick(e=>b.core.wake(e.chatId,e));
     assert.equal(first.length,1);assert.equal(records.length,1);
-    const sent=await b.core.send(chat.id,{text:'synthetic opening',deliveryId:'opening-1'});
+    assert.equal(first[0].chatId,owner.id);
+    const sent=await b.core.reply(owner.id,{text:'synthetic opening',deliveryId:'opening-1'},{});
     assert.equal(sent.status,'ok');
     await b.core.close();b=await fixture(dir,records,{initiative});
     assert.equal((await b.initiative.tick(e=>b.core.wake(e.chatId,e))).length,0);
@@ -126,29 +133,32 @@ test('native flush failure leaves Python inbox pending and unknown receipt unack
   }finally{await b.core.close();}
 });
 
-test('Python fake unknown send is fenced against new delivery IDs and restart',async t=>{
+test('uncertain delivery is never replayed across restart and an independent delivery can proceed',async t=>{
   const dir=fs.mkdtempSync(path.join(path.resolve('.test-scratch'),'python-send-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const records=[];let b=await fixture(dir,records,{faults:{send:{action:'unknown'}}});
   try{
     const result=await b.core.send(chat.id,{text:'synthetic only',deliveryId:'first'});
     assert.equal(result.status,'unknown');
-    await assert.rejects(b.core.send(chat.id,{text:'different',deliveryId:'second'}),/SEND_RECONCILIATION_REQUIRED/);
-    await b.core.close();b=await fixture(dir,records,{faults:{send:{action:'unknown'}}});
-    await assert.rejects(b.core.send(chat.id,{text:'third',deliveryId:'third'}),/SEND_RECONCILIATION_REQUIRED/);
+    assert.equal((await b.core.send(chat.id,{text:'synthetic only',deliveryId:'first'})).duplicate,true);
+    await b.core.close();b=await fixture(dir,records);
+    const receipt=await b.core.send(chat.id,{text:'synthetic only',deliveryId:'first'});
+    assert.equal(receipt.status,'unknown');assert.equal(receipt.duplicate,true);
+    assert.equal((await b.core.send(chat.id,{text:'different',deliveryId:'second'})).status,'ok');
     const audit=fs.readFileSync(path.join(dir,'driver','fake-events.jsonl'),'utf8').trim().split(/\r?\n/).map(JSON.parse);
-    assert.equal(audit.filter(x=>x.command==='send').length,1);
+    assert.equal(audit.filter(x=>x.command==='send').length,2);
   }finally{await b.core.close();}
 });
 
-test('long reply is split into stable bounded UI sends; partial uncertainty fences the chat',async t=>{
+test('long reply uses bounded UI sends and never repeats a partially confirmed batch',async t=>{
   const dir=fs.mkdtempSync(path.join(path.resolve('.test-scratch'),'python-long-'));
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   const b=await fixture(dir,[],{faults:{send:{action:'unknown',calls:[2]}}});
   try{
     const result=await b.core.send(chat.id,{text:'x'.repeat(1300),deliveryId:'long'});
     assert.equal(result.status,'unknown');
-    await assert.rejects(b.core.send(chat.id,{text:'retry',deliveryId:'different'}),/SEND_RECONCILIATION_REQUIRED/);
+    const replay=await b.core.send(chat.id,{text:'x'.repeat(1300),deliveryId:'long'});
+    assert.equal(replay.status,'unknown');assert.equal(replay.duplicate,true);
     const audit=fs.readFileSync(path.join(dir,'driver','fake-events.jsonl'),'utf8').trim().split(/\r?\n/).map(JSON.parse);
     assert.equal(audit.filter(x=>x.command==='send').length,2);
   }finally{await b.core.close();}

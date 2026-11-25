@@ -55,7 +55,7 @@ test('concurrent duplicate incoming events are admitted once and assistant echoe
   assert.equal(results.reduce((n,r)=>n+r.duplicate,0),2);
   assert.equal([...f.agents.inbox.values()].flat().length,1);
   await f.restart();f.core.resume();
-  assert.deepEqual(await f.core.ingest({chatId:'group-a',messages:[msg('same')]}),{accepted:0,duplicate:1,ackable:['same'],quarantined:[]});
+  assert.deepEqual(await f.core.ingest({chatId:'group-a',messages:[msg('same')]}),{accepted:0,duplicate:1,rejected:0,ackable:['same'],quarantined:[]});
 });
 
 test('core records only a later UI echo as outbound evidence and owner fact needs exact source',async t=>{
@@ -122,7 +122,7 @@ test('followup persistence failure is quarantined and never blindly replayed',as
   await assert.rejects(f.core.ingest({chatId:'group-a',messages:[msg('flaky')]}),/synthetic flush failure/);
   assert.equal(f.core.status('group-a').unknownMessages,1);
   fail=false;
-  assert.deepEqual(await f.core.ingest({chatId:'group-a',messages:[msg('flaky')]}),{accepted:0,duplicate:1,ackable:[],quarantined:['flaky']});
+  assert.deepEqual(await f.core.ingest({chatId:'group-a',messages:[msg('flaky')]}),{accepted:0,duplicate:1,rejected:0,ackable:[],quarantined:['flaky']});
   assert.equal([...f.agents.inbox.values()].flat().length,1);
 });
 

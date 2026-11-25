@@ -24,7 +24,7 @@ try{
  for(const f of fibers)await f.await();
  const {defineTool}=await load('dsh-tools');const {createBridge}=await import('../../src/index.mjs');
  const sends=[],driver={maxChars:1000,resume(){},pause(){},async close(){},async call(op,args){assert.equal(op,'send_text');sends.push(args);return{status:sends.length===1?'unknown':'ok'}}};
- bridge=await createBridge(ctx,{stateDir:path.join(scratch,'bridge'),mode:'mock',model:{provider:'offline',model:'offline'},chats:[{id:'owner',title:'SYNTHETIC OWNER',mode:'private',owner:true}]},{driver,defineTool});
+ bridge=await createBridge(ctx,{stateDir:path.join(scratch,'bridge'),mode:'mock',autoImages:false,model:{provider:'offline',model:'offline'},chats:[{id:'owner',title:'SYNTHETIC OWNER',mode:'private',owner:true}]},{driver,defineTool});
  bridge.features.setPersona('owner','SYNTHETIC_OLD_PERSONA');bridge.core.resume();
  await bridge.core.ingest({chatId:'owner',messages:[{id:'A',text:'synthetic A'},{id:'B',text:'synthetic B'}]});
  bridge.features.setPersona('owner','SYNTHETIC_NEW_PERSONA');release();

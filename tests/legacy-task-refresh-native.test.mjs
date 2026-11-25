@@ -7,7 +7,7 @@ test('real rc4 recreates only idle owner scope and preserves persisted session',
   for(const n of ['dsh-system-prompt','dsh-session','dsh-agent','dsh-llm','dsh-tools','dsh-session-projection','dsh-agent-loop'])fibers.push(ctx.plugin((await load(n)).default,{}));
   fibers.push(ctx.plugin(await load('dsh-session-persistence-jsonl'),{root:path.join(root,'sessions'),compression:'none'}));for(const f of fibers)await f.await();
   const {createBridge}=await import('../src/index.mjs'),{defineTool}=await load('dsh-tools');
-  bridge=await createBridge(ctx,{mode:'mock',stateDir:path.join(root,'state'),ownerTaskTools:['synthetic_executor'],chats:[{id:'owner',title:'SYNTHETIC OWNER',mode:'private',owner:true},{id:'group',title:'SYNTHETIC GROUP',mode:'group',owner:false}]},{defineTool,driver:{pause(){},resume(){},close(){},async call(){throw Error('UI_CALL_FORBIDDEN');}}});
+  bridge=await createBridge(ctx,{mode:'mock',autoImages:false,stateDir:path.join(root,'state'),ownerTaskTools:['synthetic_executor'],chats:[{id:'owner',title:'SYNTHETIC OWNER',mode:'private',owner:true},{id:'group',title:'SYNTHETIC GROUP',mode:'group',owner:false}]},{defineTool,driver:{pause(){},resume(){},close(){},async call(){throw Error('UI_CALL_FORBIDDEN');}}});
   bridge.core.resume();const h=await bridge.core.handle('owner'),g=await bridge.core.handle('group');
   const before=(await h.agent.ctx.tools.schemas(h.agent)).map(t=>t.name);assert.ok(before.includes('wechat_task'));
   const session=h.agent.session.id;bridge.core.capabilities.taskManager.tools=[];extension=install(bridge.core);const proof=await extension.refresh();

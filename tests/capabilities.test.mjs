@@ -20,11 +20,16 @@ test('configured group search and local drawing run outside UI queue with a pers
   const config={chats:[group],searchEnabled:true,forge:{enabled:true,url:'http://127.0.0.1:7860',model:'synthetic'},
     vision:{enabled:true,url:'http://127.0.0.1:1234/v1/chat/completions',model:'synthetic'},
     drawDailyLimit:1,timeZone:'UTC'};
-  const caps=createCapabilities({config,media,generatedRoot:root,workerPath});
+  const searchWorker=async request=>{
+    assert.deepEqual(request.queries,['offline']);
+    assert.equal(request.count,5);
+    return {results:[{title:'Synthetic',url:'https://example.invalid/source'}]};
+  };
+  const caps=createCapabilities({config,media,generatedRoot:root,workerPath,searchWorker,python:process.env.XQ_TEST_PYTHON||'python'});
   assert.ok(allowedTools(group,caps).has('wechat_search'));
   assert.ok(allowedTools(group,caps).has('wechat_draw'));
   authorize(group,'wechat_draw');
-  assert.equal((await caps.search({args:{query:'offline'}}))[0].title,'Synthetic');
+  assert.equal((await caps.search({args:{query:'offline'}})).results[0].title,'Synthetic');
   const described=await caps.describeImage({chatId:'group',args:{id:'m_'+'0'.repeat(32)}});
   assert.equal(described.description,'Synthetic image description');
   assert.equal(described.animationFramesAnalyzed,false);

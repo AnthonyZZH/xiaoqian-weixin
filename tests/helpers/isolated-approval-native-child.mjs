@@ -8,7 +8,7 @@ const {TaskWireBudget}=await import(pathToFileURL(path.join(project,'vendor/isol
 const {createBridge}=await import(pathToFileURL(path.join(project,'src/index.mjs')));
 const ctx=new Context(),fibers=[],errors=[],created=[],requests=[],gates=new Map(),definitions=new Map();
 const budget=new TaskWireBudget();budget.transportAttached=true;
-let bridge,statusExtension,networkAttempts=0,physical=0,sends=0;
+let bridge,networkAttempts=0,physical=0,sends=0;
 globalThis.fetch=async()=>{networkAttempts++;throw Error('OFFLINE_NETWORK_DENIED');};
 ctx.provide('xiaoqianIsolatedProvider',{provider:'offline',budget});
 ctx.on('agent/error',x=>errors.push(String(x?.error?.message||x?.message||'agent-error')));
@@ -38,13 +38,16 @@ try{
  fibers.push(ctx.plugin((await load('dsh-session-query')).default,{}));
  fibers.push(ctx.plugin({inject:['llm'],apply(c){c.llm.registerAdapter(['offline'],new Offline());}},{}));
  for(const f of fibers)await f.await();
- const driver={maxChars:1000,resume(){},pause(){},async close(){},async call(){sends++;throw Error('OFFLINE_WECHAT_FORBIDDEN');}};
- bridge=await createBridge(ctx,{stateDir:path.join(scratch,'bridge'),mode:'mock',nativePackageRoot:root,
+ const driver={maxChars:1000,resume(){},pause(){},async close(){},async call(operation){
+  if(operation==='schedule_heard')return {status:'ok'};
+  sends++;throw Error('OFFLINE_WECHAT_FORBIDDEN');
+ }};
+ bridge=await createBridge(ctx,{stateDir:path.join(scratch,'bridge'),mode:'mock',autoImages:false,nativePackageRoot:root,
   model:{provider:'offline',model:'offline',maxTokens:2048},ownerIntegrations:{enabled:true},
   longTasks:{enabled:true,isolated:true,root:path.join(scratch,'tasks')},
   chats:[{id:'owner',title:'SYNTHETIC OWNER',mode:'private',owner:true,persona:'SYNTHETIC BASE'},
    {id:'group',title:'SYNTHETIC GROUP',mode:'group',owner:false}]},
-  {driver,defineTool:spec=>{if(spec.name.startsWith('owner_long_task'))definitions.set(spec.name,spec);return defineTool(spec);}});
+  {driver,defineTool:spec=>{if(spec.name.startsWith('owner_long_task')||spec.name==='owner_sessions_status')definitions.set(spec.name,spec);return defineTool(spec);}});
  bridge.core.resume();
  const owner=(await bridge.core.handle('owner')).agent,group=(await bridge.core.handle('group')).agent;
  const submit=definitions.get('owner_long_task'),status=definitions.get('owner_long_task_status'),cancel=definitions.get('owner_long_task_cancel');
@@ -60,9 +63,7 @@ try{
  const originalRead=fs.readFileSync,originalList=fs.readdirSync;let metadata;
  try{fs.readFileSync=()=>{throw Error('STATUS_FILE_READ_FORBIDDEN');};fs.readdirSync=()=>{throw Error('STATUS_FILE_SCAN_FORBIDDEN');};metadata=statusSource();}finally{fs.readFileSync=originalRead;fs.readdirSync=originalList;}
  const taskMetadata=metadata.find(r=>r.id===queued.task_id);assert.equal(taskMetadata.loaded,true);assert.equal(taskMetadata.sessionId,sid);assert.ok(!Object.hasOwn(taskMetadata,'agent'));assert.ok(!Object.hasOwn(taskMetadata,'result'));assert.ok(!JSON.stringify(metadata).includes('SYNTHETIC BASE'));
- const {createStatusExtension}=await import(pathToFileURL(path.join(project,'tools/owner-session-status-extension.mjs')));
- statusExtension=createStatusExtension({core:bridge.core,defineTool:spec=>{definitions.set(spec.name,spec);return defineTool(spec);},scheduler:{setInterval(){return{unref(){}};},clearInterval(){}}});
- assert.equal(statusExtension.inspect().longTaskCoverage,true);
+ assert.ok(bridge.core.capabilities.ownerNativeTools.includes('owner_sessions_status'));
  const statusTool=definitions.get('owner_sessions_status');assert.ok(statusTool);
  const safeStatus=await invoke(statusTool,{});assert.equal(safeStatus.coverage.isolatedTaskRegistry,true);
  const visible=safeStatus.sessions.find(r=>r.id===queued.task_id);assert.equal(visible.loaded,true);assert.equal(visible.state,'running');assert.equal(visible.queueLength,0);
@@ -97,6 +98,6 @@ try{
  console.log(JSON.stringify({ok:true,nativeVersion:'0.2.1-rc.4',nativeLifecycle:true,offlineProvider:true,taskIDImmediate:true,independentAgent:true,foregroundProgress:true,personaCAS:true,completionInOriginalSession:true,queryReadback:true,nativeCancellation:true,noDuplicate:true,physicalFakeRequests:physical,networkAttempts,wechatSends:sends,paidCalls:0,errors}));
 }finally{
  for(const gate of gates.values())gate.resolve();
- statusExtension?.close();await bridge?.core.close();
+ await bridge?.core.close();
  for(const fiber of fibers.reverse())await fiber.dispose();
 }
