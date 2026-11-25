@@ -37,12 +37,12 @@ function fixture(t,options={}){
   serial(fn){const job=chain.then(fn);chain=job.catch(()=>{});return job;},
   async openHandle(_id,{sessionId,handoff}){if(options.createFails)throw Error('CANDIDATE_FAILED');return makeHandle(sessionId,handoff);}};
  const library={async write(kind,key,payload){writes.push({kind,key,payload});if(options.writeFails)throw Error('ARCHIVE_WRITE_FAILED');const id='note-'+writes.length;notes.set(id,payload);return id;},
-  async read(id){return options.badHash?notes.get(id)+'corrupted':notes.get(id);}};
+  async read(id,context){if(options.read)return options.read(id,notes.get(id),context);return options.badHash?notes.get(id)+'corrupted':notes.get(id);}};
  const timers={callbacks:new Map(),next:0,setTimeout(fn){const id=++this.next;this.callbacks.set(id,fn);if(options.timeout)queueMicrotask(fn);return id;},clearTimeout(id){this.callbacks.delete(id);}};
  const config={stateDir:root,chats:[chat],model:core.model,rotationLite:{enabled:true,baseline:100,maxSummaryInputTokens:60000,prices:PRICE,...options.cfg}};
  const hostCtx={sessions:{flush:async()=>true}};
  const args={getCore:()=>core,hostCtx,config,library,clock:()=>clock.now,timers,
-  model:async(input,signal)=>{calls.push({input,signal,coreModel:core.model});if(options.timeout)return new Promise(()=>{});if(options.summary)return options.summary;return SUMMARY;}};
+  model:async(input,signal,settings)=>{calls.push({input,signal,settings,coreModel:core.model});if(options.respond)return options.respond(input,signal,settings);if(options.timeout)return new Promise(()=>{});if(options.summary)return options.summary;return SUMMARY;}};
  if(options.sessionFactory)args.sessionFactory=options.sessionFactory;
  let service=createRotationLite(args),listener;
  const observe=()=>{old.agent.ctx.on=(_name,fn)=>{listener=fn;return ()=>{listener=null;};};old.agent.ctx.effect=()=>{};service.register({agent:old.agent,chat});};
@@ -192,6 +192,132 @@ test('prior summary and most recent messages fit configured summary input budget
  f.setMessages(Array.from({length:200},(_,i)=>({role:i%2?'assistant':'user',content:[{type:'text',text:'消息'+i+'中文'.repeat(100)}]})));
  f.manual();await f.tick();assert.equal(f.calls.length,1);const input=JSON.parse(f.calls[0].input);
  assert.ok(input.previous.startsWith('旧摘要'));assert.ok(input.messages.at(-1).text.includes('199'));assert.ok(Buffer.byteLength(f.calls[0].input)<=3000-1024);assert.ok(!f.calls[0].input.includes('\uFFFD'));
+});
+
+test('rechecks one acknowledged note using its original ID without repeating any write',async t=>{
+ const reads=[];
+ const f=await calibrated(t,{read(id,value,{signal}){
+  assert.equal(signal.aborted,false);
+  reads.push(id);
+  if(reads.length===1)throw Object.assign(Error('not visible'),{code:'LIBRARY_NOTE_NOT_FOUND'});
+  if(reads.length===2)throw Error('ARCHIVE_RETRIEVAL_NOT_CONFIRMED');
+  return value;
+ }});
+ f.manual();await Promise.all([f.tick(),f.tick()]);
+ assert.deepEqual(reads,['note-1','note-1','note-1','note-2','note-3']);
+ assert.deepEqual(f.writes.map(w=>w.kind),['archive','manifest','summary']);
+ assert.equal(f.calls.length,1);assert.equal(Object.keys(f.core.state().rotationCommits).length,1);
+ assert.equal(f.audit.at(-1).readbackRetries,2);
+});
+
+test('three missing reads preserve the old route and wait six hours with no model call',async t=>{
+ let reads=0;
+ const f=await calibrated(t,{read(){reads++;throw Error('LIBRARY_NOTE_NOT_FOUND');}});
+ f.manual();await f.tick();
+ assert.equal(reads,3);assert.equal(f.writes.length,1);assert.equal(f.calls.length,0);
+ oldRetained(f);assert.equal(f.readState().retryAt,f.clock.now+6*3600000);
+ assert.equal(f.audit.at(-1).reason,'LIBRARY_NOTE_NOT_FOUND');assert.equal(f.audit.at(-1).readbackRetries,2);
+});
+
+test('a confirmed hash mismatch fails immediately',async t=>{
+ const f=await calibrated(t,{badHash:true});f.manual();await f.tick();
+ assert.equal(f.audit.at(-1).reason,'READBACK_HASH_MISMATCH');assert.equal(f.audit.at(-1).readbackRetries,0);
+ assert.equal(f.calls.length,0);oldRetained(f);
+});
+
+test('stopping while waiting for the note prevents further reads or writes',async t=>{
+ let reads=0,seen;
+ const started=new Promise(resolve=>{seen=resolve;});
+ const f=await calibrated(t,{read(){reads++;seen();throw Error('LIBRARY_NOTE_NOT_FOUND');}});
+ f.manual();const pending=f.tick();await started;await f.service.close();await pending;
+ assert.equal(reads,1);assert.equal(f.writes.length,1);assert.equal(f.calls.length,0);
+ oldRetained(f);assert.equal(f.core.state().rotationFence,undefined);
+});
+
+test('invalid summary is repaired once from the draft alone and switches once',async t=>{
+ const draft='SYNTHETIC draft missing required headings';
+ let attempts=0;
+ const f=await calibrated(t,{respond(){return attempts++===0?draft:SUMMARY;}});
+ f.manual();await Promise.all([f.tick(),f.tick()]);await f.tick();
+ assert.equal(f.calls.length,2);assert.deepEqual(JSON.parse(f.calls[1].input),{draft});
+ assert.equal(f.calls[1].settings.maxTokens,4000);
+ assert.notEqual(f.calls[1].settings.prompt,f.calls[0].settings.prompt);
+ assert.equal(f.calls[1].signal,f.calls[0].signal);
+ assert.equal(f.audit.at(-1).summaryRepairCalls,1);assert.equal(f.audit.at(-1).summaryCalls,2);
+ assert.deepEqual(f.writes.map(w=>w.kind),['archive','manifest','summary']);
+ assert.deepEqual(JSON.parse(f.writes.at(-1).payload),{text:SUMMARY});
+ assert.equal(Object.keys(f.core.state().rotationCommits).length,1);
+});
+
+test('invalid correction, empty answers and over-budget drafts do not create a new route',async t=>{
+ for(const [draft,expectedCalls] of [['invalid draft',2],['',1],['x'.repeat(24001),1]]){
+  const f=await calibrated(t,{respond:()=>draft});f.manual();await f.tick();
+  oldRetained(f);assert.equal(f.calls.length,expectedCalls);
+  assert.equal(f.readState().retryAt,f.clock.now+6*3600000);assert.equal(f.audit.at(-1).reason,'SUMMARY_CONTRACT_INVALID');
+  assert.deepEqual(f.writes.map(w=>w.kind),['archive','manifest']);
+ }
+});
+
+test('automatic repair obeys the original economic budget',async t=>{
+ const f=await calibrated(t,{respond:()=> 'synthetic invalid draft'});
+ f.usage(2100);await f.tick();
+ assert.equal(f.calls.length,1);assert.equal(f.audit.at(-1).reason,'SUMMARY_REPAIR_BUDGET_LIMIT');
+ oldRetained(f);
+});
+
+test('native metering frees unused draft budget for an automatic repair with no tools',async t=>{
+ const prices={peak:{hit:0.1,miss:1,output:1},offpeak:{hit:0.1,miss:1,output:1}};
+ const f=await calibrated(t,{cfg:{prices}});await f.service.close();
+ const requests=[],restrictions=[];
+ const hostCtx={sessions:{flush:async()=>true},agents:{async create(settings){
+  const n=requests.length;
+  await settings.setup({tools:{restrict:item=>restrictions.push(item.allow),guard(){}},systemPrompt:{section(){}}});
+  const answer=n===0?'SYNTHETIC draft without headings':SUMMARY;
+  const session={seq:1,eventAt:()=>({type:'assistant/message',data:{usage:{inputTokens:150,cacheReadTokens:10,outputTokens:20}}}),deriveMessages:()=>[{role:'assistant',content:answer}]};
+  return {agent:{session,followup(msg){requests.push(msg.content[0].text);},whenIdle:async()=>{},cancel(){}},dispose:async()=>{}};
+ }}};
+ const notes=new Map();
+ const service=createRotationLite({getCore:()=>f.core,config:f.config,hostCtx,clock:()=>f.clock.now,
+  library:{write:async(_kind,key,body)=>{notes.set(key,body);return key;},read:async key=>notes.get(key)}});
+ t.after(()=>service.close());
+ f.usage(11000);await service.tick();
+ assert.equal(requests.length,2);assert.deepEqual(JSON.parse(requests[1]),{draft:'SYNTHETIC draft without headings'});
+ assert.deepEqual(restrictions,[[],[]]);assert.equal(f.audit.at(-1).code,'ROTATION_LITE_COMMITTED');
+});
+
+test('an operation caps extra reads across many archive parts',async t=>{
+ const firstSeen=new Set();
+ const f=await calibrated(t,{read(id,value){
+  if(firstSeen.has(id))return value;
+  firstSeen.add(id);throw Error('LIBRARY_NOTE_NOT_FOUND');
+ }});
+ f.setMessages([{role:'user',content:'a'.repeat(810000)}]);
+ f.manual();await f.tick();oldRetained(f);
+ assert.equal(firstSeen.size,5);assert.equal(f.writes.length,5);assert.equal(f.calls.length,0);
+ assert.equal(f.audit.at(-1).readbackRetries,4);
+});
+
+test('a changed source session prevents sending the draft for repair',async t=>{
+ const f=await calibrated(t,{respond:()=>{
+  f.events.push({seq:f.events.length,type:'user/message',data:{}});
+  return 'synthetic invalid draft';
+ }});
+ f.manual();await f.tick();assert.equal(f.calls.length,1);oldRetained(f);
+ assert.equal(f.audit.at(-1).reason,'SNAPSHOT_CHANGED');
+});
+
+test('a correction shares the initial timeout and cannot start a third request',async t=>{
+ let started;
+ const repairing=new Promise(resolve=>{started=resolve;});
+ const f=await calibrated(t,{respond(_input,_signal,options){
+  if(options.maxTokens===8000)return 'invalid draft';
+  started();return new Promise(()=>{});
+ }});
+ f.manual();const pending=f.tick();await repairing;
+ assert.equal(f.timers.callbacks.size,1);
+ for(const expire of f.timers.callbacks.values())expire();
+ await pending;await f.tick();assert.equal(f.calls.length,2);oldRetained(f);
+ assert.equal(f.calls[1].signal.aborted,true);assert.equal(f.audit.at(-1).reason,'SUMMARY_TIMEOUT');
 });
 
 test('price card uses current model and weekday/holiday peak boundaries, config fallback',async t=>{

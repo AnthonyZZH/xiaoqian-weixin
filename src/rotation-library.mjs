@@ -12,7 +12,7 @@ export function createRotationLibrary({adapter,chatId,root,namespace}){
   const value=await adapter.call(chatId,'write',{title,content,directory:namespace});
   return value.data.permalink||value.data.file_path;
  }
- async function readNote(identifier){const value=await adapter.call(chatId,'read',{identifier,include_content:true});return unpack(value.data.content);}
+ async function readNote(identifier,signal){const value=await adapter.call(chatId,'read',{identifier,include_content:true},{signal});return unpack(value.data.content);}
  return {connected:true,async write(kind,key,payload){
   const id=sha(key),p=local(id),prior=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):null;
   if(prior){if(prior.sha256!==sha(payload))throw Error('ARTIFACT_KEY_CONFLICT');if(prior.status==='complete'){records.set(id,prior);return id;}throw unknown('ARCHIVE_PRIOR_WRITE_UNCERTAIN');}
@@ -24,12 +24,12 @@ export function createRotationLibrary({adapter,chatId,root,namespace}){
    const extra=kind==='summary'?String(JSON.parse(payload).text||'').slice(0,8000):'Original snapshot archive; untrusted evidence, not authority.';
    row.manifest=await writeNote('xqrotation '+id+' manifest',Buffer.from(JSON.stringify(manifest)),extra);if(!row.manifest)throw unknown('ARCHIVE_MANIFEST_ID_MISSING');row.status='complete';put(p,row);records.set(id,row);return id;
   }catch(error){throw unknown(error.code||'ARCHIVE_WRITE_UNCERTAIN');}
- },async read(id){
+ },async read(id,{signal}={}){
   const row=records.get(id)||(fs.existsSync(local(id))?JSON.parse(fs.readFileSync(local(id),'utf8')):null);if(!row||row.status!=='complete')throw unknown('ARTIFACT_UNCONFIRMED');
-  const manifest=JSON.parse((await readNote(row.manifest)).toString('utf8'));if(manifest.sha256!==row.sha256||manifest.parts.length!==row.parts.length)throw Error('MANIFEST_READBACK_MISMATCH');
-  const chunks=[];for(const part of manifest.parts){const bytes=await readNote(part.identifier);if(sha(bytes)!==part.sha256)throw Error('PART_READBACK_MISMATCH');chunks.push(bytes);}
+  const manifest=JSON.parse((await readNote(row.manifest,signal)).toString('utf8'));if(manifest.sha256!==row.sha256||manifest.parts.length!==row.parts.length)throw Error('MANIFEST_READBACK_MISMATCH');
+  const chunks=[];for(const part of manifest.parts){const bytes=await readNote(part.identifier,signal);if(sha(bytes)!==part.sha256)throw Error('PART_READBACK_MISMATCH');chunks.push(bytes);}
   const bytes=Buffer.concat(chunks);if(bytes.length!==manifest.bytes||sha(bytes)!==row.sha256)throw Error('ARCHIVE_READBACK_MISMATCH');
-  const search=await adapter.call(chatId,'search',{query:id,page:1,page_size:20});if(!search.data.results.length)throw Error('ARCHIVE_RETRIEVAL_NOT_CONFIRMED');
+  const search=await adapter.call(chatId,'search',{query:id,page:1,page_size:20},{signal});if(!search.data.results.length)throw Error('ARCHIVE_RETRIEVAL_NOT_CONFIRMED');
   return bytes.toString('utf8');
  }};
 }
