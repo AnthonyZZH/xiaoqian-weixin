@@ -76,6 +76,17 @@ class MobileTaskControls(unittest.TestCase):
         self.native.assert_called_once_with("/state")
         details.assert_called_once()
 
+    def test_retry_receipt_time_cannot_replace_a_newer_inbox_time(self):
+        values = ("A", "首行监听中", "—", "11-26 01:22:00", "已发送", "11-26 01:22:05", "", 0)
+        self.enterContext(patch.object(panel, "current_status", return_value=("运行中", "", [("a", values)], None, 123)))
+        self.native.return_value = {"conversations": [{"id": "a", "receivedAt": "2026-11-25T12:00:00Z",
+                                   "phase": "已发送", "canRetry": True, "version": VERSION}]}
+        manager = self.request(key="manager")[1]["chats"][0]
+        self.assertEqual(manager["lastReceived"], values[3])
+        self.assertEqual(manager["lastSent"], values[5])
+        self.assertNotEqual(manager["lastReceived"], manager["retryReceived"])
+        self.assertNotIn("retryReceived", self.request()[1]["chats"][0])
+
     def test_missing_details_still_shows_task_title_and_manager_action(self):
         status, reader = self.request()
         self.assertEqual(status, 200)

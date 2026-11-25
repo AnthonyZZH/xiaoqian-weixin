@@ -33,17 +33,20 @@ export async function apply(ctx) {
   const stored = new Map();
   const reads = () => inboxMode === 'top-private' ? [] : recentReads(driverDir);
   function options() {
-    let listening;
+    let listening, pendingReads;
     if (inboxMode === 'top-private') {
       listening = false;
       try {
         const watch = JSON.parse(fs.readFileSync(path.join(driverDir,'top-private-status.json'),'utf8'));
         const age = Date.now()-Date.parse(watch.at);
-        listening = watch.pid === process.pid && watch.outcome === 'listening' && age >= 0 && age < 65000;
+        const cursors = JSON.parse(fs.readFileSync(path.join(driverDir,'top-private-cursors.json'),'utf8'));
+        pendingReads = new Set(Object.keys(cursors).filter(id => cursors[id]?.pending));
+        listening = watch.pid === process.pid && age >= 0 && age < 65000 &&
+          (watch.outcome === 'listening' || (watch.outcome === 'read_pending' && pendingReads.size > 0));
       } catch {}
     }
     // Only the newer top-private inbox identifies additional private chats as trusted.
-    return {listening, stored, trustedPrivate:inboxMode === 'top-private'};
+    return {listening, pendingReads, stored, trustedPrivate:inboxMode === 'top-private'};
   }
   // Read the latest receipt without waking an idle agent. Only metadata stays cached.
   async function loadIdleInputs() {

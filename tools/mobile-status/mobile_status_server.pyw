@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 import win32crypt
 
-from local_status_panel import bridge_config, current_status, local_host, local_time, timestamp
+from local_status_panel import STATUS_FIELDS, bridge_config, current_status, local_host, local_time, timestamp
 from mobile_task_details import attach_task_details
 
 
@@ -137,7 +137,6 @@ class StatusSite(ThreadingHTTPServer):
             if monotonic() >= self.expires:
                 config = bridge_config()
                 state, detail, rows, _, at = current_status(config)
-                fields = ("name", "health", "lastRead", "lastReceived", "reply")
                 try:
                     live = native("/state")
                 except ControlError:
@@ -149,10 +148,12 @@ class StatusSite(ThreadingHTTPServer):
                 live_chats = {row["id"]: row for row in live.get("conversations", [])}
                 chats = []
                 for chat_id, values in rows:
-                    row = dict(zip(fields, values))
+                    row = dict(zip(STATUS_FIELDS, values))
                     receipt = live_chats.get(chat_id, {})
                     if receipt.get("receivedAt"):
-                        row["lastReceived"] = local_time(timestamp(receipt["receivedAt"]))
+                        row["retryReceived"] = local_time(timestamp(receipt["receivedAt"]))
+                        if row.get("lastReceived", "—") == "—":
+                            row["lastReceived"] = row["retryReceived"]
                         row["reply"] = receipt["phase"]
                     row.update(id=chat_id, version=receipt.get("version"), canRetry=receipt.get("canRetry", False))
                     chats.append(row)
@@ -167,7 +168,7 @@ class StatusSite(ThreadingHTTPServer):
             if not manager:
                 result.pop("instance")
                 result.pop("canRestart")
-                result["chats"] = [{k: v for k, v in row.items() if k not in ("id","version","canRetry")}
+                result["chats"] = [{k: v for k, v in row.items() if k not in ("id","version","canRetry","retryReceived")}
                                    for row in result["chats"]]
                 if result["tasks"]:
                     visible = ("id", "title", "status", "createdAt", "startedAt", "finishedAt", "completed", "total", "steps")

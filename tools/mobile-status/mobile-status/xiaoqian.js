@@ -258,7 +258,11 @@ function chatCard(chat, data) {
   badge.className = ['正常','首行监听中'].includes(chat.health) ? 'pill ok' : 'pill';
   header.append(element('h3', chat.name), badge);
   const list = document.createElement('dl');
-  for (const [label, value] of [['最近读取', chat.lastRead], ['最近收信', chat.lastReceived], ['最近一条的回复', chat.reply]]) {
+  const facts = [['最近读取', chat.lastRead], ['最近收信', chat.lastReceived], ['最近确认发送', chat.lastSent || '—'],
+    ['最近一条的回复', chat.reply]];
+  if (chat.waiting) facts.push(['当前等待', chat.waiting]);
+  if (chat.unconfirmedSends) facts.push(['待核实发送', chat.unconfirmedSends + ' 笔']);
+  for (const [label, value] of facts) {
     const dd = element('dd', value);
     if (label === '最近一条的回复') dd.className = 'phase';
     list.append(element('dt', label), dd);
@@ -285,7 +289,7 @@ async function action(kind, instance, target) {
   const cancel = kind === 'cancel-task';
   if (cancel && pendingCancellations.has(target.id)) return;
   let prompt = '重启这台电脑上的小千？正在处理的回复可能中断。';
-  if (kind === 'retry') prompt = '为「' + target.name + '」在 ' + target.lastReceived + ' 的消息重新生成并发送一次文字回复？';
+  if (kind === 'retry') prompt = '为「' + target.name + '」在 ' + (target.retryReceived || target.lastReceived) + ' 的消息重新生成并发送一次文字回复？';
   if (cancel) prompt = '确定中断任务 #' + target.id + (target.title ? '「' + target.title + '」' : '') + '？';
   if (!window.confirm(prompt)) return;
   const key = pageKey();

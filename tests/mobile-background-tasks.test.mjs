@@ -164,6 +164,10 @@ test('receipt from the repository host enables retry only for its bound owner an
   const body = {id:chat.id,version:replyPanel(core,reads)[0].version};
   assert.equal(latestInput(session,state).key,key);
   assert.equal(replyPanel(core,reads)[0].canRetry,true);
+  const pending = () => ({listening:true, pendingReads:new Set([chat.id])});
+  assert.equal(replyPanel(core,reads,pending())[0].canRetry,false);
+  await assert.rejects(retryPanelReply(core,body,()=>reads,pending));
+  assert.equal(replyPanel(core,reads,{listening:true,pendingReads:new Set(['other'])})[0].canRetry,true);
   chat.owner=false; chat.trustedPrivate=true;
   assert.equal(replyPanel(core,reads)[0].canRetry,false);
   await assert.rejects(retryPanelReply(core,body,()=>reads));

@@ -39,7 +39,8 @@ function snapshot(core, chat, read, options) {
   const busy = agent?.status === 'running' || !!active || !!agent?.inbox?.nextTurn?.length || !!agent?.inbox?.nextStep?.length;
   const uncertain = deliveries.some(d => d.status === 'unknown') || retry?.uncertain || ['unknown','followup-unknown'].includes(grant?.status);
   const pending = grant?.status === 'open';
-  const readOk = options.listening ?? (read?.outcome === 'success' && Date.now() - Date.parse(read.at) < 60000);
+  const readOk = !options.pendingReads?.has(chat.id) &&
+    (options.listening ?? (read?.outcome === 'success' && Date.now() - Date.parse(read.at) < 60000));
   let phase = '等待新消息';
   if (input) phase = receipt?.status === 'ok' ? '已发送' : '本轮结束，未确认回复';
   if (grant?.status === 'open') phase = '已收信，等待处理';

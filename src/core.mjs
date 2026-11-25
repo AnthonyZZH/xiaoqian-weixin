@@ -160,6 +160,7 @@ export class WeChatCore {
       }catch(e){s.messages[key].status='unknown';this.permits.close(chatId,grantId,'followup-unknown');this.store.audit('FOLLOWUP_UNKNOWN',chatId);throw e;}
       this.store.save();ackable.push(m.id);
     }
+    if(accepted)s.lastReceivedAt=new Date().toISOString();
     if(accepted||rejected)this.store.audit('INGEST',chatId,{accepted,duplicate,rejected});return {accepted,duplicate,rejected,ackable,quarantined};
   });}
   async deliverOwnerAttachment(chatId,descriptor){return this.serial(async()=>{
@@ -359,16 +360,16 @@ export class WeChatCore {
     const budget=await this.initiative?.reserveSend(chatId,{proactive:opening})||{allowed:true};
     requireValue(budget.allowed,'PROACTIVE_BUDGET_DENIED');
     // Persist prior to side effect. Partial text+image sends never retry as a whole.
-    s.deliveries[key]={status:'sending',...(context.grantId?{grantId:context.grantId}:{})};this.store.save();
+    s.deliveries[key]={status:'sending',startedAt:new Date().toISOString(),...(context.grantId?{grantId:context.grantId}:{})};this.store.save();
     let result,effects=0;
     try{
       for(let i=0;i<chunks.length;i++){
         requireValue(!context.signal?.aborted,'TOOL_CANCELLED');
         result=await this.driver.call('send_text',{targetId:chatId,text:chunks[i],at:i?[]:at,idempotencyKey:key+(chunks.length===1?':text':':text:'+i)});
         if(result.status!=='ok')throw Object.assign(new Error('SEND_NOT_CONFIRMED'),{outcome:result});
-        effects++;
+        effects++;s.lastConfirmedSentAt=new Date().toISOString();
       }
-      if(stickerId){requireValue(!context.signal?.aborted,'TOOL_CANCELLED');result=await this.driver.call('send_image',{targetId:chatId,stickerId,idempotencyKey:key+':media',mediaKind:asset.kind,...(asset.path?{path:asset.path}:{})});if(result.status!=='ok')throw Object.assign(new Error('SEND_NOT_CONFIRMED'),{outcome:result});effects++;}
+      if(stickerId){requireValue(!context.signal?.aborted,'TOOL_CANCELLED');result=await this.driver.call('send_image',{targetId:chatId,stickerId,idempotencyKey:key+':media',mediaKind:asset.kind,...(asset.path?{path:asset.path}:{})});if(result.status!=='ok')throw Object.assign(new Error('SEND_NOT_CONFIRMED'),{outcome:result});effects++;s.lastConfirmedSentAt=new Date().toISOString();}
       s.deliveries[key]={status:'ok',...(context.grantId?{grantId:context.grantId}:{})};await this.initiative?.spoke(chatId,{opening,sourceId:key});if(context.preservePendingWake!==true)s.pendingWake=null;
     }catch(e){
       const knownNotSent=effects===0&&e.outcome?.status==='rejected';
